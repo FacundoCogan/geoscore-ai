@@ -1,12 +1,30 @@
-'use client'
+"use client"
 
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Map } from "lucide-react"
 import Link from "next/link"
 import { LoginForm } from "@/components/login-form"
+import { supabase } from "@/lib/supabase"
 
 export default function LoginPage() {
+  const router = useRouter()
+
+  // Agregamos este bloque para verificar la sesión apenas carga la página
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (session) {
+        // Si ya hay sesión activa, lo mandamos al inicio
+        router.push("/") 
+      }
+    }
+    
+    checkSession()
+  }, [router])
+
   return (
-    // Acá agregamos un gradiente radial muy moderno
     <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-background to-background">
       
       {/* Header flotante tipo "glassmorphism" */}

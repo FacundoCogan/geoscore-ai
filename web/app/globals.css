@@ -123,3 +123,9 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Ocultar el icono de "ojo" */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
