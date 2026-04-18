@@ -1,0 +1,11 @@
+spring.application.name=api
+
+spring.datasource.url=${DB_URL}
+spring.datasource.username=${DB_USER}
+spring.datasource.password=${DB_PASSWORD}
+
+supabase.jwt.secret=${SUPABASE_JWT_SECRET}
+
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+server.port=8080
