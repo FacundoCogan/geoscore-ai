@@ -8,12 +8,27 @@ import { SearchFilters, type SearchFiltersState } from "@/components/search-filt
 import { PropertyCard, type Property } from "@/components/property-card"
 import { PropertyMap } from "@/components/property-map"
 import { EmptyResults } from "@/components/empty-results"
+import { PropertyDetailView } from "@/components/property-detail"
 import { supabase } from "@/lib/supabase"
 
-const MOCK_PROPERTIES: Property[] = [
-  // Lo pasé a "alquiler" para que haga match con el botón activo por defecto del buscador
-  { id: "1", titulo: "Depto luminoso", direccion: "Av. Santa Fe 2500", barrio: "Palermo", precio: 180000, ambientes: 2, banos: 1, superficie: 55, imagen: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&q=60", tipoOperacion: "alquiler", destacado: true, geoScore: 92 },
-  { id: "2", titulo: "PH Reciclado", direccion: "Av. Cabildo 3800", barrio: "Belgrano", precio: 320000, ambientes: 4, banos: 2, superficie: 120, imagen: "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&q=60", tipoOperacion: "venta", geoScore: 85 },
+// Expandimos los Mocks para que tengan los datos que pide la Ficha de Detalle
+const MOCK_PROPERTIES: any[] = [
+  { 
+    id: "1", titulo: "Depto luminoso", direccion: "Av. Santa Fe 2500", barrio: "Palermo", precio: 180000, ambientes: 2, banos: 1, superficie: 55, 
+    imagen: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&q=60", 
+    tipoOperacion: "alquiler", destacado: true, geoScore: 92,
+    descripcion: "Excelente departamento de 2 ambientes al frente. Muy luminoso, con balcón corrido. Pisos de madera hidrolaqueados. Cocina integrada con barra desayunadora.",
+    antiguedad: 5, pisos: 4, disponible: true, imagenes: ["https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&q=60", "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&q=60"],
+    amenities: ["Aire acondicionado", "Balcón", "Seguridad 24hs"]
+  },
+  { 
+    id: "2", titulo: "PH Reciclado", direccion: "Av. Cabildo 3800", barrio: "Belgrano", precio: 320000, ambientes: 4, banos: 2, superficie: 120, 
+    imagen: "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&q=60", 
+    tipoOperacion: "venta", geoScore: 85,
+    descripcion: "Hermoso PH totalmente reciclado a nuevo. Sin expensas. Cuenta con patio interno, terraza propia con parrilla y lavadero independiente.",
+    antiguedad: 30, disponible: true, imagenes: ["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&q=60"],
+    amenities: ["Parrilla", "Terraza", "Lavadero"]
+  },
 ]
 
 export default function BuscadorPage() {
@@ -23,6 +38,9 @@ export default function BuscadorPage() {
   const [hasSearched, setHasSearched] = useState(false)
   const [mapError, setMapError] = useState(false) 
   const [user, setUser] = useState<any>(null)
+
+  // Maneja qué propiedad se está viendo en detalle
+  const [detailProperty, setDetailProperty] = useState<any | null>(null)
 
   useEffect(() => {
     const checkUser = async () => {
@@ -66,7 +84,18 @@ export default function BuscadorPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-      <header className="border-b bg-white sticky top-0 z-50">
+      
+      {/* OVERLAY DEL DETALLE (CU-02) */}
+      {detailProperty && (
+        <PropertyDetailView 
+          property={detailProperty}
+          isRegisteredUser={!!user}
+          onClose={() => setDetailProperty(null)}
+          onCalculateScore={() => alert("Acá se abriría el análisis completo del GeoScore AI")}
+        />
+      )}
+
+      <header className="border-b bg-white sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => router.push('/')}>
              <div className="text-primary">
@@ -76,7 +105,6 @@ export default function BuscadorPage() {
           </div>
           
           <div className="flex items-center gap-4">
-             {/* Navegación corregida: Sin "Buscar" duplicado */}
              <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600 mr-4">
                 <span className="cursor-pointer text-slate-900 font-bold border-b-2 border-primary pb-1">Inicio</span>
                 <span className="cursor-pointer hover:text-primary">Publicar</span>
@@ -115,11 +143,17 @@ export default function BuscadorPage() {
               </h2>
 
               {filteredProperties.length === 0 ? (
-                <EmptyResults />
+                <EmptyResults onClearFilters={() => { setFilters(null); setHasSearched(false); }} />
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                   {filteredProperties.map((p) => (
-                    <PropertyCard key={p.id} property={p} isSelected={selectedProperty === p.id} onClick={() => setSelectedProperty(p.id)} />
+                    <PropertyCard 
+                      key={p.id} 
+                      property={p} 
+                      isSelected={selectedProperty === p.id} 
+                      onClick={() => setSelectedProperty(p.id)} 
+                      onViewDetail={() => setDetailProperty(p)} 
+                    />
                   ))}
                 </div>
               )}

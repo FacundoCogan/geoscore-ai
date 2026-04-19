@@ -19,7 +19,7 @@ export interface Property {
   imagen: string
   tipoOperacion: "alquiler" | "venta"
   destacado?: boolean
-  geoScore?: number // Agregamos GeoScore a la data
+  geoScore?: number
 }
 
 interface PropertyCardProps {
@@ -35,7 +35,7 @@ export function PropertyCard({ property, isSelected, onClick, onViewDetail }: Pr
   const formatPrice = (value: number) => {
     return new Intl.NumberFormat("es-AR", {
       style: "currency",
-      currency: "USD", // Generalmente propiedades en CABA se tasan en USD
+      currency: "USD",
       maximumFractionDigits: 0,
     }).format(value)
   }
