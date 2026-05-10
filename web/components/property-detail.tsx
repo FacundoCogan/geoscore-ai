@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
+import { InteractiveMapView } from "./interactive-map"
 
 export interface PropertyDetail {
   id: string
@@ -33,7 +34,7 @@ export interface PropertyDetail {
   amenities?: string[]
   expensas?: number
   disponible: boolean
-  geoScore?: number // Agregamos el GeoScore para la UI
+  geoScore?: number
 }
 
 interface PropertyDetailProps {
@@ -42,6 +43,17 @@ interface PropertyDetailProps {
   onClose: () => void
   onCalculateScore: () => void
 }
+
+// POIs simulados para el análisis de entorno del CU-08
+const MOCK_POIS_ANALISIS: any[] = [
+  { id: '1', nombre: 'Colegio Nacional', categoria: 'educacion', distancia: 350, lat: -34.5880, lng: -58.4370 },
+  { id: '2', nombre: 'Universidad de la Ciudad', categoria: 'educacion', distancia: 850, lat: -34.5820, lng: -58.4310 },
+  { id: '3', nombre: 'Hospital Central', categoria: 'salud', distancia: 1200, lat: -34.5910, lng: -58.4420 },
+  { id: '4', nombre: 'Estación Subte Línea D', categoria: 'transporte', distancia: 200, lat: -34.5860, lng: -58.4350 },
+  { id: '5', nombre: 'Parada Colectivos 152, 68, 41', categoria: 'transporte', distancia: 150, lat: -34.5870, lng: -58.4360 },
+  { id: '6', nombre: 'Gimnasio Megatlon', categoria: 'deporte', distancia: 400, lat: -34.5890, lng: -58.4340 },
+  { id: '7', nombre: 'Club Atlético', categoria: 'deporte', distancia: 1500, lat: -34.5950, lng: -58.4450 },
+]
 
 export function PropertyDetailView({
   property,
@@ -52,11 +64,14 @@ export function PropertyDetailView({
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [isFavorite, setIsFavorite] = useState(false)
   const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({})
+  
+  // Estado para controlar la apertura del mapa interactivo
+  const [showInteractiveMap, setShowInteractiveMap] = useState(false)
 
   const formatPrice = (value: number) => {
     return new Intl.NumberFormat("es-AR", {
       style: "currency",
-      currency: "USD", // Ajustado a USD como en el buscador
+      currency: "USD",
       maximumFractionDigits: 0,
     }).format(value)
   }
@@ -69,12 +84,25 @@ export function PropertyDetailView({
     setCurrentImageIndex((prev) => prev === property.imagenes.length - 1 ? 0 : prev + 1)
   }
 
-  // Atajador real para el Camino Alternativo A2 (Error de imágenes)
   const handleImageError = (index: number) => {
     setImageErrors((prev) => ({ ...prev, [index]: true }))
   }
 
   const allImagesError = property.imagenes.every((_, idx) => imageErrors[idx])
+
+  // Si el usuario pide el mapa, renderizamos el InteractiveMapView por encima de todo
+  if (showInteractiveMap) {
+    return (
+      <div className="fixed inset-0 z-[60] bg-background">
+        <InteractiveMapView 
+          propertyAddress={property.direccion}
+          propertyBarrio={property.barrio}
+          pois={MOCK_POIS_ANALISIS}
+          onClose={() => setShowInteractiveMap(false)} 
+        />
+      </div>
+    )
+  }
 
   // CU-02 Camino Alternativo A1: Propiedad no disponible
   if (!property.disponible) {
@@ -98,7 +126,6 @@ export function PropertyDetailView({
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-50 overflow-auto font-sans">
-      {/* Header Fijo */}
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between max-w-6xl">
           <Button variant="ghost" onClick={onClose} className="gap-2 text-slate-600 hover:text-slate-900">
@@ -123,7 +150,6 @@ export function PropertyDetailView({
           {/* Galería de Imágenes */}
           <div className="relative rounded-2xl overflow-hidden bg-slate-200 mb-8 shadow-sm border border-slate-200">
             {allImagesError ? (
-              // CU-02 Camino Alternativo A2: Renderizado
               <div className="h-[400px] md:h-[500px] flex flex-col items-center justify-center bg-slate-100">
                 <ImageOff className="h-16 w-16 text-slate-300 mb-3" />
                 <p className="text-slate-500 font-medium">No se pudieron cargar las imágenes</p>
@@ -163,7 +189,6 @@ export function PropertyDetailView({
               </>
             )}
 
-            {/* Badges Flotantes */}
             <div className="absolute top-4 left-4 flex gap-2">
               <Badge className="bg-primary hover:bg-primary text-white shadow-md capitalize px-3 py-1 text-sm">
                 {property.tipoOperacion}
@@ -177,7 +202,6 @@ export function PropertyDetailView({
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Columna Izquierda: Información */}
             <div className="lg:col-span-2 space-y-8">
               <div>
                 <h1 className="text-3xl font-extrabold text-slate-900 mb-3 text-balance">
@@ -189,7 +213,6 @@ export function PropertyDetailView({
                 </div>
               </div>
 
-              {/* Tarjetas de características rápidas */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="flex flex-col items-center justify-center bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
                   <Bed className="h-6 w-6 text-primary mb-2" />
@@ -275,11 +298,8 @@ export function PropertyDetailView({
               )}
             </div>
 
-            {/* Columna Derecha: Panel de Acción */}
             <div className="lg:col-span-1">
               <div className="sticky top-24 space-y-6">
-                
-                {/* Panel de Precio */}
                 <Card className="shadow-lg border-slate-200">
                   <CardHeader className="bg-slate-50 border-b border-slate-100 rounded-t-xl pb-6">
                     <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-1">Valor de la propiedad</p>
@@ -295,7 +315,6 @@ export function PropertyDetailView({
                   </CardHeader>
                   <CardContent className="p-6 space-y-4">
                     
-                    {/* Tarjeta exclusiva GeoScore AI */}
                     <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-center justify-between">
                        <div className="flex items-center gap-3">
                           <div className="bg-primary p-2 rounded-lg text-white">
@@ -312,7 +331,11 @@ export function PropertyDetailView({
                        </div>
                     </div>
 
-                    <Button className="w-full h-12 text-base font-bold shadow-md" onClick={onCalculateScore}>
+                    {/* Botón que dispara la vista del mapa interactivo */}
+                    <Button 
+                      className="w-full h-12 text-base font-bold shadow-md" 
+                      onClick={() => setShowInteractiveMap(true)}
+                    >
                       <TrendingUp className="h-5 w-5 mr-2" />
                       Ver Análisis Detallado
                     </Button>
@@ -335,7 +358,6 @@ export function PropertyDetailView({
                     )}
                   </CardContent>
                 </Card>
-
               </div>
             </div>
           </div>
