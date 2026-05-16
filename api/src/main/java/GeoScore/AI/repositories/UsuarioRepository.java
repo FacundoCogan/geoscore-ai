@@ -1,9 +1,9 @@
 package GeoScore.AI.repositories;
 
-import GeoScore.AI.entities.Usuario;
+import GeoScore.AI.entities.UsuarioEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
-import java.util.UUID;
+import org.springframework.stereotype.Repository;
 
-public interface UsuarioRepository extends JpaRepository<Usuario, UUID> {
-    Usuario findByEmail(String email);
+@Repository
+public interface UsuarioRepository extends JpaRepository<UsuarioEntity, String> {
 }

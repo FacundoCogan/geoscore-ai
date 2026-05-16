@@ -37,18 +37,64 @@ export default function BuscadorPage() {
   const [user, setUser] = useState<any>(null)
   const [detailProperty, setDetailProperty] = useState<any | null>(null)
   const [showProfileConfig, setShowProfileConfig] = useState(false)
-  
   const [currentProfile, setCurrentProfile] = useState<LifestyleProfile | null>(null)
+  const [isLoadingSession, setIsLoadingSession] = useState(true)
 
+  // Función para ir a buscar el perfil al backend Java 
+  const fetchUserProfile = async (userId: string) => {
+    if (!userId) return;
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+
+      const res = await fetch(`http://localhost:8080/api/usuarios/${userId}/perfil`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      
+      if (res.status === 200) {
+        const profile = await res.text()
+        setCurrentProfile(profile as LifestyleProfile)
+      } else {
+        setCurrentProfile(null) 
+      }
+    } catch (error) {
+      console.error("El backend de Java está apagado o inaccesible:", error)
+      setCurrentProfile(null)
+    }
+  }
+
+  // Hook de ciclo de vida (Garantiza que la carga termine SIEMPRE)
   useEffect(() => {
     const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      setUser(session?.user || null)
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.user) {
+          setUser(session.user)
+          await fetchUserProfile(session.user.id)
+        }
+      } catch (error) {
+        console.error("Error validando usuario en Supabase:", error)
+      } finally {
+        // Esta línea se ejecuta SÍ O SÍ, pase lo que pase, liberando la pantalla
+        setIsLoadingSession(false) 
+      }
     }
+
     checkUser()
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null)
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      try {
+        if (session?.user) {
+          setUser(session.user)
+          await fetchUserProfile(session.user.id)
+        } else {
+          setUser(null)
+          setCurrentProfile(null)
+        }
+      } finally {
+        setIsLoadingSession(false)
+      }
     })
 
     return () => authListener.subscription.unsubscribe()
@@ -69,6 +115,36 @@ export default function BuscadorPage() {
     setCurrentProfile(null);
   }
 
+  // Guardar en la base de datos real
+  const handleSaveProfile = async (profile: LifestyleProfile) => {
+    if (!user) return
+    
+    try {
+      // Pedimos el token actual a Supabase
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+
+      const res = await fetch('http://localhost:8080/api/usuarios/perfil', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ userId: user.id, profile: profile })
+      })
+
+      if (res.ok) {
+        setCurrentProfile(profile)
+        setShowProfileConfig(false)
+      } else {
+        alert("Hubo un error al guardar tu perfil en el servidor. Spring Security bloqueó la petición.")
+      }
+    } catch (error) {
+      console.error("Error al guardar:", error)
+      alert("No se pudo conectar con el servidor.")
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       
@@ -77,7 +153,7 @@ export default function BuscadorPage() {
           <LifestyleProfileForm 
             currentProfile={currentProfile}
             onCancel={() => setShowProfileConfig(false)}
-            onSave={(profile) => { setCurrentProfile(profile); setShowProfileConfig(false); }}
+            onSave={handleSaveProfile} // se dispara el POST al backend Java para guardar el perfil
           />
         </div>
       )}
@@ -105,8 +181,9 @@ export default function BuscadorPage() {
                 <span className="cursor-pointer hover:text-primary">Contacto</span>
              </nav>
               
-             {/* Acá restauramos los controles de usuario completos */}
-             {user ? (
+             {isLoadingSession ? (
+                <div className="h-8 w-24 bg-slate-200 animate-pulse rounded-md"></div>
+              ) : user ? (
                 <div className="flex items-center gap-3">
                   <span className="text-sm font-medium text-slate-600 hidden sm:block">{user.email}</span>
                   <Button variant="ghost" size="sm" className="gap-2" onClick={() => setShowProfileConfig(true)}>

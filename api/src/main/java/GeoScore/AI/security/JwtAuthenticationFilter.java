@@ -1,29 +1,22 @@
 package GeoScore.AI.security;
 
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import javax.crypto.SecretKey;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
-
-    @Value("${supabase.jwt.secret}")
-    private String jwtSecret;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -32,48 +25,41 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // 1. Buscamos el header de autorización
         final String authHeader = request.getHeader("Authorization");
 
-        // Si no hay token, o no empieza con "Bearer ", seguimos de largo (quizás es un invitado)
+        // Si no hay token, seguimos de largo
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             filterChain.doFilter(request, response);
             return;
         }
 
         try {
-            // 2. Extraemos el token (sacamos la palabra "Bearer")
-            final String jwt = authHeader.substring(7);
+            // 2. Agarramos el token limpio (sin la palabra Bearer)
+            String token = authHeader.substring(7);
 
-            // 3. Preparamos la llave secreta para desencriptar
-            SecretKey key = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
-
-            // 4. Leemos el token y verificamos la firma
-            Claims claims = Jwts.parser()
-                    .verifyWith(key)
-                    .build()
-                    .parseSignedClaims(jwt)
-                    .getPayload();
-
-            // En Supabase, el campo "sub" (Subject) contiene el UUID único del usuario
-            String userId = claims.getSubject();
-
-            // 5. Si el token es válido y no hay nadie logueado en este hilo, lo registramos
-            if (userId != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-
-                // Creamos la credencial interna de Spring
-                UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                        userId, null, new ArrayList<>() // Acá podríamos sumar Roles si usáramos (Admin, User)
-                );
-                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-
-                // Usuario autenticado para esta petición
-                SecurityContextHolder.getContext().setAuthentication(authToken);
+            // 3. Separamos el JWT en sus 3 partes (Header, Payload, Signature)
+            String[] chunks = token.split("\\.");
+            if (chunks.length != 3) {
+                throw new RuntimeException("Formato de token JWT inválido");
             }
+
+            // 4. Decodificamos solo el Payload (que está en Base64 URL Safe)
+            String payload = new String(Base64.getUrlDecoder().decode(chunks[1]));
+
+            // 5. Leemos el JSON para extraer el "sub" (que es el ID del usuario en Supabase)
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode jsonNode = mapper.readTree(payload);
+            String userId = jsonNode.get("sub").asText();
+
+            // 6. Autenticamos al usuario en Spring Security
+            UsernamePasswordAuthenticationToken authToken =
+                    new UsernamePasswordAuthenticationToken(userId, null, new ArrayList<>());
+
+            SecurityContextHolder.getContext().setAuthentication(authToken);
+
         } catch (Exception e) {
-            // Si el token expiró o la firma es falsa, ignoramos el token.
-            // Más adelante Spring Security le devolverá un Error 401 (No autorizado).
-            System.out.println("Token JWT inválido o expirado: " + e.getMessage());
+            System.out.println("Error decodificando el JWT de Supabase: " + e.getMessage());
         }
 
-        // Dejamos que la petición siga su curso
+        // Dejamos que la petición siga su curso hacia el Controlador
         filterChain.doFilter(request, response);
     }
 }

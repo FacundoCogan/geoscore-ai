@@ -1,38 +1,38 @@
 package GeoScore.AI.controllers;
 
-import GeoScore.AI.entities.Usuario;
-import GeoScore.AI.repositories.UsuarioRepository;
+import GeoScore.AI.dto.ProfileUpdateRequest;
+import GeoScore.AI.services.UsuarioService;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.UUID;
-
 @RestController
-@RequestMapping("/api/perfil")
+@RequestMapping("/api/usuarios")
+@CrossOrigin(origins = "http://localhost:3000")
 public class UsuarioController {
 
-    private final UsuarioRepository usuarioRepository;
+    private final UsuarioService usuarioService;
 
-    public UsuarioController(UsuarioRepository usuarioRepository) {
-        this.usuarioRepository = usuarioRepository;
+    public UsuarioController(UsuarioService usuarioService) {
+        this.usuarioService = usuarioService;
     }
 
-    @PostMapping("/crear")
-    public ResponseEntity<Usuario> crearPerfil(@RequestBody Usuario usuario) {
-        // Obtenemos el UUID que el filtro JWT extrajo del token de Supabase
-        String userId = (String) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        usuario.setId(UUID.fromString(userId));
-
-        Usuario guardado = usuarioRepository.save(usuario);
-        return ResponseEntity.ok(guardado);
+    @PostMapping("/perfil")
+    public ResponseEntity<String> updateProfile(@RequestBody ProfileUpdateRequest request) {
+        // CU-06: Guardado del perfil en base de datos
+        try {
+            usuarioService.updateLifestyleProfile(request.getUserId(), request.getProfile());
+            return ResponseEntity.ok("¡Perfil actualizado exitosamente!");
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Error al guardar el perfil");
+        }
     }
 
-    @GetMapping("/me")
-    public ResponseEntity<Usuario> obtenerMiPerfil() {
-        String userId = (String) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        return usuarioRepository.findById(UUID.fromString(userId))
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+    @GetMapping("/{userId}/perfil")
+    public ResponseEntity<String> getProfile(@PathVariable String userId) {
+        String perfil = usuarioService.getLifestyleProfile(userId);
+        if (perfil != null) {
+            return ResponseEntity.ok(perfil);
+        }
+        return ResponseEntity.noContent().build(); // Retorna 204 si el usuario todavía no eligió nada
     }
 }
