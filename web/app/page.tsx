@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Map, UserCircle } from "lucide-react"
+import { Map, UserCircle, Scale, Heart, CheckCircle2, Info } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SearchFilters, type SearchFiltersState } from "@/components/search-filters"
 import { PropertyCard, type Property } from "@/components/property-card"
@@ -10,22 +10,25 @@ import { PropertyMap } from "@/components/property-map"
 import { EmptyResults } from "@/components/empty-results"
 import { PropertyDetailView } from "@/components/property-detail"
 import { LifestyleProfileForm, type LifestyleProfile } from "@/components/lifestyle-profile-form"
+import { CompareProperties } from "@/components/compare-properties"
+import { FavoritesView } from "@/components/favorites-view"
 import { supabase } from "@/lib/supabase"
 
-const MOCK_PROPERTIES: any[] = [
+const MOCK_PROPERTIES: Property[] = [
   { 
-    id: "1", titulo: "Depto luminoso", direccion: "Av. Santa Fe 2500", barrio: "Palermo", precio: 180000, ambientes: 2, banos: 1, superficie: 55, 
+    id: "1", titulo: "Depto luminoso con balcón", direccion: "Av. Santa Fe 2500", barrio: "Palermo", precio: 180000, ambientes: 2, banos: 1, superficie: 55, 
     imagen: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&q=60", 
     tipoOperacion: "alquiler", destacado: true,
-    descripcion: "Excelente departamento de 2 ambientes al frente. Muy luminoso.",
-    antiguedad: 5, pisos: 4, disponible: true, imagenes: ["https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&q=60"]
   },
   { 
-    id: "2", titulo: "PH Reciclado", direccion: "Av. Cabildo 3800", barrio: "Belgrano", precio: 320000, ambientes: 4, banos: 2, superficie: 120, 
+    id: "2", titulo: "Amplio PH reciclado", direccion: "Av. Cabildo 3800", barrio: "Belgrano", precio: 320000, ambientes: 4, banos: 2, superficie: 120, 
     imagen: "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&q=60", 
     tipoOperacion: "venta",
-    descripcion: "Hermoso PH totalmente reciclado a nuevo.",
-    antiguedad: 30, disponible: true, imagenes: ["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&q=60"]
+  },
+  { 
+    id: "3", titulo: "Departamento con vista al río", direccion: "Juana Manso 500", barrio: "Puerto Madero", precio: 450000, ambientes: 3, banos: 2, superficie: 95, 
+    imagen: "https://images.unsplash.com/photo-1493809842364-78817add7ffb?w=800&q=60", 
+    tipoOperacion: "alquiler",
   }
 ]
 
@@ -33,127 +36,163 @@ export default function BuscadorPage() {
   const router = useRouter()
   const [filters, setFilters] = useState<SearchFiltersState | null>(null)
   const [selectedProperty, setSelectedProperty] = useState<string | null>(null)
-  const [hasSearched, setHasSearched] = useState(false)
+  
+  // Estados de Sesión
   const [user, setUser] = useState<any>(null)
+  const [isLoadingSession, setIsLoadingSession] = useState(true)
+  
+  // Estados de Módulos (CU)
   const [detailProperty, setDetailProperty] = useState<any | null>(null)
   const [showProfileConfig, setShowProfileConfig] = useState(false)
   const [currentProfile, setCurrentProfile] = useState<LifestyleProfile | null>(null)
-  const [isLoadingSession, setIsLoadingSession] = useState(true)
+  
+  // CU-10 (Comparador)
+  const [comparingIds, setComparingIds] = useState<string[]>([])
+  const [showCompareView, setShowCompareView] = useState(false)
+  
+  // CU-11 (Favoritos)
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([])
+  const [showFavoritesView, setShowFavoritesView] = useState(false)
+  const [toastMsg, setToastMsg] = useState<{title: string, desc: string, type: "success" | "info"} | null>(null)
 
-  // Función para ir a buscar el perfil al backend Java 
-  const fetchUserProfile = async (userId: string) => {
-    if (!userId) return;
-    
+  // ---------------- LÓGICA DEL BACKEND ----------------
+
+  const fetchUserProfile = async (userId: string, token: string) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-
-      const res = await fetch(`http://localhost:8080/api/usuarios/${userId}/perfil`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-      
-      if (res.status === 200) {
-        const profile = await res.text()
-        setCurrentProfile(profile as LifestyleProfile)
-      } else {
-        setCurrentProfile(null) 
-      }
-    } catch (error) {
-      console.error("El backend de Java está apagado o inaccesible:", error)
-      setCurrentProfile(null)
-    }
+      const res = await fetch(`http://localhost:8080/api/usuarios/${userId}/perfil`, { headers: { 'Authorization': `Bearer ${token}` }})
+      if (res.status === 200) setCurrentProfile(await res.text() as LifestyleProfile)
+      else setCurrentProfile(null) 
+    } catch (e) { console.error(e); setCurrentProfile(null) }
   }
 
-  // Hook de ciclo de vida (Garantiza que la carga termine SIEMPRE)
+  const fetchFavorites = async (userId: string, token: string) => {
+    try {
+      const res = await fetch(`http://localhost:8080/api/favoritos/${userId}`, { headers: { 'Authorization': `Bearer ${token}` }})
+      if (res.ok) setFavoriteIds(await res.json())
+    } catch (e) { console.error(e) }
+  }
+
   useEffect(() => {
     const checkUser = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession()
         if (session?.user) {
           setUser(session.user)
-          await fetchUserProfile(session.user.id)
+          await Promise.all([
+            fetchUserProfile(session.user.id, session.access_token),
+            fetchFavorites(session.user.id, session.access_token)
+          ])
         }
-      } catch (error) {
-        console.error("Error validando usuario en Supabase:", error)
-      } finally {
-        // Esta línea se ejecuta SÍ O SÍ, pase lo que pase, liberando la pantalla
-        setIsLoadingSession(false) 
-      }
+      } finally { setIsLoadingSession(false) }
     }
-
     checkUser()
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       try {
         if (session?.user) {
           setUser(session.user)
-          await fetchUserProfile(session.user.id)
+          await Promise.all([
+            fetchUserProfile(session.user.id, session.access_token),
+            fetchFavorites(session.user.id, session.access_token)
+          ])
         } else {
           setUser(null)
           setCurrentProfile(null)
+          setFavoriteIds([])
         }
-      } finally {
-        setIsLoadingSession(false)
-      }
+      } finally { setIsLoadingSession(false) }
     })
-
     return () => authListener.subscription.unsubscribe()
   }, [])
 
-  const filteredProperties = useMemo(() => {
-    if (!filters) return MOCK_PROPERTIES
-    return MOCK_PROPERTIES.filter(p => {
-      if (p.precio < filters.precioMin || p.precio > filters.precioMax) return false
-      if (p.tipoOperacion !== filters.tipoOperacion) return false
-      return true
-    })
-  }, [filters])
+  // ---------------- EVENTOS (HANDLERS) ----------------
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setCurrentProfile(null);
+  const showToast = (title: string, desc: string, type: "success" | "info" = "success") => {
+    setToastMsg({ title, desc, type })
+    setTimeout(() => setToastMsg(null), 3500)
   }
 
-  // Guardar en la base de datos real
-  const handleSaveProfile = async (profile: LifestyleProfile) => {
-    if (!user) return
+  const handleToggleFavorite = async (propertyId: string, propertyTitle: string = "Inmueble") => {
+    if (!user) {
+      router.push('/login')
+      return;
+    }
+    
+    // Optimistic UI update (se refleja instantáneamente en el front)
+    const isAdding = !favoriteIds.includes(propertyId);
+    setFavoriteIds(prev => isAdding ? [...prev, propertyId] : prev.filter(id => id !== propertyId));
     
     try {
-      // Pedimos el token actual a Supabase
       const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-
-      const res = await fetch('http://localhost:8080/api/usuarios/perfil', {
+      const res = await fetch('http://localhost:8080/api/favoritos/toggle', {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ userId: user.id, profile: profile })
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ userId: user.id, inmuebleId: propertyId })
       })
 
       if (res.ok) {
-        setCurrentProfile(profile)
-        setShowProfileConfig(false)
+        const result = await res.json()
+        if (result.accion === "agregado") {
+          showToast("Agregado a favoritos", `Se guardó "${propertyTitle}" en tu lista.`, "success")
+        } else {
+          showToast("Removido de favoritos", `Se eliminó "${propertyTitle}" de tu lista.`, "info")
+        }
       } else {
-        alert("Hubo un error al guardar tu perfil en el servidor. Spring Security bloqueó la petición.")
+        // Si falla el backend, revertimos el estado
+        setFavoriteIds(prev => !isAdding ? [...prev, propertyId] : prev.filter(id => id !== propertyId));
       }
-    } catch (error) {
-      console.error("Error al guardar:", error)
-      alert("No se pudo conectar con el servidor.")
+    } catch (e) {
+      console.error(e);
+      setFavoriteIds(prev => !isAdding ? [...prev, propertyId] : prev.filter(id => id !== propertyId));
     }
   }
+
+  const handleToggleCompare = (propertyId: string) => {
+    if (comparingIds.includes(propertyId)) {
+      setComparingIds(comparingIds.filter(id => id !== propertyId))
+      return
+    }
+    if (comparingIds.length === 1) {
+      setComparingIds([...comparingIds, propertyId])
+      setShowCompareView(true)
+    } else if (comparingIds.length === 0) {
+      setComparingIds([propertyId])
+    }
+  }
+
+  const filteredProperties = useMemo(() => {
+    if (!filters) return MOCK_PROPERTIES
+    return MOCK_PROPERTIES.filter(p => p.precio >= filters.precioMin && p.precio <= filters.precioMax && p.tipoOperacion === filters.tipoOperacion)
+  }, [filters])
+
+  // ---------------- RENDER ----------------
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       
+      {/* Toast Notification global */}
+      {toastMsg && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] flex items-start gap-3 bg-slate-900 text-white px-4 py-3 rounded-lg shadow-xl animate-in slide-in-from-top-5">
+          {toastMsg.type === "success" ? <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0 mt-0.5" /> : <Info className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" />}
+          <div className="flex flex-col gap-1"><span className="text-sm font-semibold">{toastMsg.title}</span><span className="text-xs opacity-90">{toastMsg.desc}</span></div>
+        </div>
+      )}
+
       {showProfileConfig && (
-        <div className="fixed inset-0 z-[70] bg-background overflow-auto p-6 flex items-start justify-center">
+        <div className="fixed inset-0 z-[70] bg-background/90 backdrop-blur-sm overflow-auto p-6 flex items-start justify-center">
           <LifestyleProfileForm 
             currentProfile={currentProfile}
             onCancel={() => setShowProfileConfig(false)}
-            onSave={handleSaveProfile} // se dispara el POST al backend Java para guardar el perfil
+            onSave={async (profile) => {
+              const { data: { session } } = await supabase.auth.getSession()
+              await fetch('http://localhost:8080/api/usuarios/perfil', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+                body: JSON.stringify({ userId: user.id, profile })
+              })
+              setCurrentProfile(profile)
+              setShowProfileConfig(false)
+            }}
           />
         </div>
       )}
@@ -169,28 +208,25 @@ export default function BuscadorPage() {
 
       <header className="border-b bg-white sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => router.push('/')}>
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => {setShowCompareView(false); setShowFavoritesView(false);}}>
             <Map className="h-6 w-6 text-primary" />
             <span className="font-extrabold text-xl text-slate-800">GeoScore AI</span>
           </div>
           
           <div className="flex items-center gap-4">
-             <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600 mr-4">
-                <span className="cursor-pointer text-slate-900 font-bold border-b-2 border-primary pb-1">Inicio</span>
-                <span className="cursor-pointer hover:text-primary">Publicar</span>
-                <span className="cursor-pointer hover:text-primary">Contacto</span>
-             </nav>
-              
              {isLoadingSession ? (
                 <div className="h-8 w-24 bg-slate-200 animate-pulse rounded-md"></div>
               ) : user ? (
                 <div className="flex items-center gap-3">
-                  <span className="text-sm font-medium text-slate-600 hidden sm:block">{user.email}</span>
+                  <span className="text-sm font-medium text-slate-600 hidden md:block">{user.email}</span>
+                  <Button variant="ghost" size="sm" className="gap-2 text-rose-500 hover:text-rose-600 hover:bg-rose-50" onClick={() => {setShowFavoritesView(true); setShowCompareView(false);}}>
+                    <Heart className="h-4 w-4" fill={favoriteIds.length > 0 ? "currentColor" : "none"} /> Mis Favoritos
+                  </Button>
                   <Button variant="ghost" size="sm" className="gap-2" onClick={() => setShowProfileConfig(true)}>
                     <UserCircle className="h-4 w-4" /> Mi Perfil
                   </Button>
-                  <Button variant="outline" size="sm" onClick={handleLogout} className="text-slate-600">
-                    Cerrar Sesión
+                  <Button variant="outline" size="sm" onClick={() => {supabase.auth.signOut(); setUser(null);}} className="text-slate-600">
+                    Salir
                   </Button>
                 </div>
               ) : (
@@ -202,23 +238,63 @@ export default function BuscadorPage() {
         </div>
       </header>
 
-      <main className="flex-1 container mx-auto px-4 py-8 max-w-7xl">
-        <div className="flex flex-col lg:flex-row gap-8">
-          <aside className="w-full lg:w-[320px]"><SearchFilters onSearch={(f) => { setFilters(f); setHasSearched(true); }} onClear={() => { setFilters(null); setHasSearched(false); }} /></aside>
-          <div className="flex-1 flex flex-col gap-8">
-            <div className="h-[400px] rounded-xl border bg-white overflow-hidden p-2"><PropertyMap properties={filteredProperties} selectedProperty={selectedProperty} onPropertySelect={setSelectedProperty} /></div>
-            <div>
-              <h2 className="text-xl font-bold text-slate-800 mb-6">
-                {hasSearched ? `${filteredProperties.length} inmuebles encontrados` : "Inmuebles destacados"}
-              </h2>
-              {filteredProperties.length === 0 ? <EmptyResults onClearFilters={() => { setFilters(null); setHasSearched(false); }} /> : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {filteredProperties.map(p => <PropertyCard key={p.id} property={p} isSelected={selectedProperty === p.id} onClick={() => setSelectedProperty(p.id)} onViewDetail={() => setDetailProperty(p)} />)}
-                </div>
-              )}
+      <main className="flex-1 container mx-auto px-4 py-8 max-w-7xl relative">
+        
+        {comparingIds.length === 1 && !showCompareView && !showFavoritesView && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-4 z-50 animate-in slide-in-from-bottom-5">
+            <Scale className="h-5 w-5 text-primary" />
+            <span className="font-medium text-sm">Seleccioná un segundo inmueble para comparar</span>
+            <Button variant="outline" size="sm" className="h-7 text-xs border-slate-700 bg-slate-800 hover:bg-slate-700 text-white" onClick={() => setComparingIds([])}>Cancelar</Button>
+          </div>
+        )}
+
+        {showCompareView ? (
+           <CompareProperties 
+             property1={MOCK_PROPERTIES.find(p => p.id === comparingIds[0])}
+             property2={MOCK_PROPERTIES.find(p => p.id === comparingIds[1])}
+             onClose={() => { setShowCompareView(false); setComparingIds([]); }}
+           />
+        ) : showFavoritesView ? (
+           <FavoritesView 
+             properties={MOCK_PROPERTIES.filter(p => favoriteIds.includes(p.id))}
+             comparingIds={comparingIds}
+             onClose={() => setShowFavoritesView(false)}
+             onToggleFavorite={(id, title) => handleToggleFavorite(id, title)}
+             onCompare={(id) => handleToggleCompare(id)}
+             onViewDetail={(property) => setDetailProperty(property)}
+           />
+        ) : (
+          <div className="flex flex-col lg:flex-row gap-8 animate-in fade-in duration-300">
+            <aside className="w-full lg:w-[320px]">
+               <SearchFilters onSearch={setFilters} onClear={() => setFilters(null)} />
+            </aside>
+            <div className="flex-1 flex flex-col gap-8">
+              <div className="h-[400px] rounded-xl border bg-white overflow-hidden p-2">
+                <PropertyMap properties={filteredProperties} selectedProperty={selectedProperty} onPropertySelect={setSelectedProperty} />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-800 mb-6">Inmuebles destacados</h2>
+                {filteredProperties.length === 0 ? <EmptyResults onClearFilters={() => setFilters(null)} /> : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {filteredProperties.map(p => (
+                      <PropertyCard 
+                        key={p.id} 
+                        property={p} 
+                        isSelected={selectedProperty === p.id} 
+                        isComparing={comparingIds.includes(p.id)}
+                        isFavorite={favoriteIds.includes(p.id)} 
+                        onCompare={() => handleToggleCompare(p.id)}
+                        onToggleFavorite={() => handleToggleFavorite(p.id, p.titulo)} 
+                        onClick={() => setSelectedProperty(p.id)} 
+                        onViewDetail={() => setDetailProperty(p)} 
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </main>
     </div>
   )

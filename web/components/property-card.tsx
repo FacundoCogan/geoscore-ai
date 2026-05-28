@@ -1,7 +1,6 @@
 "use client"
 
-import { useState } from "react"
-import { MapPin, Bed, Bath, Square, Heart, Eye, TrendingUp } from "lucide-react"
+import { MapPin, Bed, Square, Heart, Eye, TrendingUp, Scale } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -23,14 +22,26 @@ export interface Property {
 }
 
 interface PropertyCardProps {
-  property: Property
-  isSelected?: boolean
-  onClick?: () => void
-  onViewDetail?: () => void
+  property: Property;
+  isSelected?: boolean;
+  isComparing?: boolean;
+  isFavorite?: boolean;
+  onCompare?: () => void;
+  onToggleFavorite?: (id: string) => void;
+  onClick?: () => void;
+  onViewDetail?: () => void;
 }
 
-export function PropertyCard({ property, isSelected, onClick, onViewDetail }: PropertyCardProps) {
-  const [isFavorite, setIsFavorite] = useState(false)
+export function PropertyCard({ 
+  property, 
+  isSelected, 
+  isComparing, 
+  isFavorite,
+  onCompare, 
+  onToggleFavorite,
+  onClick, 
+  onViewDetail 
+}: PropertyCardProps) {
 
   const formatPrice = (value: number) => {
     return new Intl.NumberFormat("es-AR", {
@@ -43,7 +54,7 @@ export function PropertyCard({ property, isSelected, onClick, onViewDetail }: Pr
   return (
     <Card 
       className={cn(
-        "overflow-hidden cursor-pointer transition-all hover:shadow-xl group border-border/50",
+        "overflow-hidden cursor-pointer transition-all hover:shadow-xl group border-border/50 flex flex-col",
         isSelected && "ring-2 ring-primary bg-primary/[0.02]"
       )}
       onClick={onClick}
@@ -55,13 +66,10 @@ export function PropertyCard({ property, isSelected, onClick, onViewDetail }: Pr
           className="w-full h-52 object-cover group-hover:scale-105 transition-transform duration-500"
         />
         <div className="absolute top-3 left-3 flex gap-2">
-          <Badge className="capitalize shadow-sm">
-            {property.tipoOperacion}
-          </Badge>
+          <Badge className="capitalize shadow-sm">{property.tipoOperacion}</Badge>
           {property.geoScore && (
             <Badge variant="outline" className="bg-background/90 backdrop-blur-sm border-primary/20 text-primary font-bold">
-              <TrendingUp className="h-3 w-3 mr-1" />
-              {property.geoScore}
+              <TrendingUp className="h-3 w-3 mr-1" /> {property.geoScore}
             </Badge>
           )}
         </div>
@@ -71,48 +79,55 @@ export function PropertyCard({ property, isSelected, onClick, onViewDetail }: Pr
           className="absolute top-3 right-3 bg-background/80 backdrop-blur-sm hover:bg-background rounded-full shadow-sm"
           onClick={(e) => {
             e.stopPropagation()
-            setIsFavorite(!isFavorite)
+            if (onToggleFavorite) onToggleFavorite(property.id)
           }}
         >
           <Heart className={cn("h-4 w-4 transition-colors", isFavorite && "fill-destructive text-destructive")} />
         </Button>
       </div>
-      <CardContent className="p-5">
+      
+      <CardContent className="p-5 flex flex-col flex-1">
         <div className="flex items-start justify-between gap-2 mb-2">
-          <h3 className="font-bold text-foreground line-clamp-1 text-lg">
-            {property.titulo}
-          </h3>
+          <h3 className="font-bold text-foreground line-clamp-1 text-lg">{property.titulo}</h3>
         </div>
         <div className="flex items-center gap-1 text-sm text-muted-foreground mb-4">
-          <MapPin className="h-3 w-3" />
+          <MapPin className="h-3 w-3 shrink-0" />
           <span className="line-clamp-1">{property.direccion}, {property.barrio}</span>
         </div>
-        
         <div className="flex items-center justify-between mb-4">
            <span className="font-extrabold text-2xl text-primary tracking-tight">
             {formatPrice(property.precio)}
           </span>
         </div>
-
-        <div className="flex items-center justify-between border-t border-border/50 pt-4">
+        <div className="flex items-center justify-between border-t border-border/50 pt-4 mt-auto">
           <div className="flex items-center gap-3 text-xs font-medium text-muted-foreground">
             <div className="flex items-center gap-1"><Bed className="h-3.5 w-3.5" /> {property.ambientes} amb</div>
             <div className="flex items-center gap-1"><Square className="h-3.5 w-3.5" /> {property.superficie} m²</div>
           </div>
-          {onViewDetail && (
-            <Button
-              variant="secondary"
-              size="sm"
-              className="gap-1 h-8 rounded-lg font-semibold"
-              onClick={(e) => {
-                e.stopPropagation()
-                onViewDetail()
-              }}
-            >
-              <Eye className="h-3.5 w-3.5" />
-              Ver Ficha
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {onCompare && (
+              <Button
+                variant={isComparing ? "default" : "outline"}
+                size="sm"
+                className={cn("gap-1 h-8 rounded-lg font-semibold", isComparing && "bg-primary text-primary-foreground")}
+                onClick={(e) => { e.stopPropagation(); onCompare(); }}
+              >
+                <Scale className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{isComparing ? "Seleccionado" : "Comparar"}</span>
+              </Button>
+            )}
+            {onViewDetail && (
+              <Button
+                variant="secondary"
+                size="sm"
+                className="gap-1 h-8 rounded-lg font-semibold"
+                onClick={(e) => { e.stopPropagation(); onViewDetail(); }}
+              >
+                <Eye className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Ver Ficha</span>
+              </Button>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>
