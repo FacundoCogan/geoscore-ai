@@ -1,154 +1,109 @@
 "use client"
 
-import { useState } from "react"
-import { MapPin, Bed, Bath, Square, Heart, ChevronLeft, ChevronRight, X, Calendar, Building, Compass, Car, Wifi, Wind, Flame, ImageOff, AlertCircle, Share2, TrendingUp, Map as MapIcon } from "lucide-react"
+import { X, MapPin, BedDouble, Ruler, Tag, Target } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
-import { cn } from "@/lib/utils"
-import { InteractiveMapView } from "./interactive-map"
-import { EnvironmentScoreView } from "./environment-score"
 
-export interface PropertyDetail {
-  id: string
-  titulo: string
-  direccion: string
-  barrio: string
-  precio: number
-  ambientes: number
-  banos: number
-  superficie: number
-  superficieCubierta?: number
-  imagenes: string[]
-  tipoOperacion: "alquiler" | "venta"
-  destacado?: boolean
-  descripcion: string
-  antiguedad: number
-  pisos?: number
-  orientacion?: string
-  cochera?: boolean
-  amenities?: string[]
-  expensas?: number
-  disponible: boolean
+interface PropertyDetailViewProps {
+  property: any;
+  isRegisteredUser: boolean;
+  userProfile: string | null;
+  onClose: () => void;
 }
 
-interface PropertyDetailProps {
-  property: PropertyDetail
-  isRegisteredUser: boolean
-  userProfile?: string | null 
-  onClose: () => void
-}
-
-export function PropertyDetailView({ property, isRegisteredUser, userProfile = null, onClose }: PropertyDetailProps) {
-  const [currentImageIndex, setCurrentImageIndex] = useState(0)
-  const [isFavorite, setIsFavorite] = useState(false)
-  const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({})
-  const [showInteractiveMap, setShowInteractiveMap] = useState(false)
-  const [showEnvironmentScore, setShowEnvironmentScore] = useState(false)
-
-  const formatPrice = (value: number) => {
-    return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(value)
-  }
-
-  const handlePrevImage = () => setCurrentImageIndex((prev) => prev === 0 ? property.imagenes.length - 1 : prev - 1)
-  const handleNextImage = () => setCurrentImageIndex((prev) => prev === property.imagenes.length - 1 ? 0 : prev + 1)
-
-  // Abrimos el Score pasándole el Perfil
-  if (showEnvironmentScore) {
-    return (
-      <div className="fixed inset-0 z-[80] bg-background">
-        <EnvironmentScoreView 
-          propertyId={property.id}
-          propertyAddress={property.direccion}
-          propertyBarrio={property.barrio}
-          isRegisteredUser={isRegisteredUser}
-          userProfile={userProfile} // <-- ACÁ SE LO PASA AL SCORE
-          onClose={() => setShowEnvironmentScore(false)} 
-        />
-      </div>
-    )
-  }
-
-  if (showInteractiveMap) {
-    return (
-      <div className="fixed inset-0 z-[60] bg-background">
-        <InteractiveMapView propertyAddress={property.direccion} propertyBarrio={property.barrio} pois={[]} onClose={() => setShowInteractiveMap(false)} />
-      </div>
-    )
-  }
-
-  if (!property.disponible) {
-    return (
-      <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
-        <Card className="w-full max-w-md shadow-xl border-none">
-          <CardContent className="p-8 text-center">
-            <AlertCircle className="h-16 w-16 text-slate-300 mx-auto mb-4" />
-            <h3 className="text-xl font-bold text-slate-800 mb-2">Propiedad no disponible</h3>
-            <p className="text-slate-500 mb-6">La propiedad seleccionada ya no está disponible.</p>
-            <Button onClick={onClose} className="w-full h-11">Volver al buscador</Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
+export function PropertyDetailView({ property, userProfile, onClose }: PropertyDetailViewProps) {
+  if (!property) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-50 overflow-auto font-sans">
-      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between max-w-6xl">
-          <Button variant="ghost" onClick={onClose} className="gap-2">
-            <ChevronLeft className="h-5 w-5" /> Volver a resultados
-          </Button>
-        </div>
-      </header>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
+      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onClose} />
+      
+      <div className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row z-10 animate-in zoom-in-95">
+        <Button 
+          variant="secondary" 
+          size="icon" 
+          className="absolute top-4 right-4 z-20 rounded-full shadow-md bg-white/80 hover:bg-white"
+          onClick={onClose}
+        >
+          <X className="h-5 w-5" />
+        </Button>
 
-      <main className="container mx-auto px-4 py-8">
-        <div className="max-w-6xl mx-auto">
-          {/* GALERÍA DE IMÁGENES */}
-          <div className="relative rounded-2xl overflow-hidden bg-muted mb-8 aspect-[21/9]">
-            <img src={property.imagenes[currentImageIndex]} alt={property.titulo} className="w-full h-full object-cover" />
-            <div className="absolute top-4 left-4 flex gap-2">
-              <Badge variant="default" className="capitalize">{property.tipoOperacion}</Badge>
-            </div>
+        {/* Imagen del Inmueble */}
+        <div className="w-full md:w-1/2 h-64 md:h-[550px] relative bg-muted">
+          <img 
+            src={property.imagen} 
+            alt={property.titulo} 
+            className="w-full h-full object-cover"
+          />
+          <Badge className="absolute top-4 left-4 text-sm px-3 py-1 uppercase tracking-wider bg-primary text-primary-foreground shadow-md">
+            {property.tipoOperacion}
+          </Badge>
+        </div>
+
+        {/* Detalles */}
+        <div className="w-full md:w-1/2 p-6 sm:p-8 flex flex-col overflow-y-auto max-h-[550px]">
+          <div className="mb-6">
+            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-2 leading-tight">
+              {property.titulo}
+            </h2>
+            <p className="flex items-center gap-2 text-muted-foreground">
+              <MapPin className="h-4 w-4 shrink-0 text-primary" />
+              {property.direccion}, {property.barrio}
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 space-y-8">
+          <div className="text-4xl font-extrabold text-primary mb-6 tracking-tight">
+            ${property.precio.toLocaleString("es-AR")}
+          </div>
+
+          {/* Medallón de GeoScore dentro de la ficha */}
+          <div className="flex items-center gap-4 p-4 mb-6 bg-slate-50 border rounded-xl shadow-sm">
+             <div className={`flex items-center justify-center w-16 h-16 rounded-full border-4 text-2xl font-bold bg-white
+                ${property.geoScore >= 8 ? 'border-green-500 text-green-600' :
+                  property.geoScore >= 6 ? 'border-yellow-500 text-yellow-600' :
+                  'border-rose-500 text-rose-500'}`}>
+                {property.geoScore}
+             </div>
+             <div>
+                <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2">
+                  <Target className="h-4 w-4 text-primary" /> GeoScore AI
+                </h3>
+                <p className="text-sm text-slate-500 leading-tight mt-1">
+                  Puntaje de entorno dinámico calculado 
+                  {userProfile ? ` aplicando la ponderación del perfil "${userProfile.charAt(0).toUpperCase() + userProfile.slice(1)}".` : ' con ponderación neutral.'}
+                </p>
+             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="flex items-center gap-3 p-4 rounded-xl bg-slate-50 border">
+              <BedDouble className="h-6 w-6 text-slate-400" />
               <div>
-                <h1 className="text-3xl font-extrabold text-slate-900 mb-3 text-balance">{property.titulo}</h1>
-                <div className="flex items-center gap-2 text-muted-foreground font-medium">
-                  <MapPin className="h-5 w-5" />
-                  <span>{property.direccion}, {property.barrio}, CABA</span>
-                </div>
+                <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Ambientes</p>
+                <p className="font-semibold text-lg">{property.ambientes}</p>
               </div>
             </div>
-
-            {/* PANEL DERECHO */}
-            <div className="lg:col-span-1">
-              <div className="sticky top-24 space-y-6">
-                <Card className="shadow-lg border-slate-200">
-                  <CardHeader className="bg-slate-50 border-b pb-6">
-                    <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-1">Valor de la propiedad</p>
-                    <CardTitle className="text-4xl font-extrabold">{formatPrice(property.precio)}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6 space-y-4">
-                    
-                    <Button className="w-full h-12 text-base font-bold shadow-md" onClick={() => setShowEnvironmentScore(true)}>
-                      <Compass className="h-5 w-5 mr-2" /> Consultar Score de Entorno
-                    </Button>
-
-                    <Button variant="secondary" className="w-full h-11 font-semibold text-primary mt-2" onClick={() => setShowInteractiveMap(true)}>
-                      <MapIcon className="h-4 w-4 mr-2" /> Ver en Mapa Interactivo
-                    </Button>
-
-                  </CardContent>
-                </Card>
+            <div className="flex items-center gap-3 p-4 rounded-xl bg-slate-50 border">
+              <Ruler className="h-6 w-6 text-slate-400" />
+              <div>
+                <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Superficie</p>
+                <p className="font-semibold text-lg">{property.superficie} m²</p>
               </div>
             </div>
           </div>
+
+          <div className="flex-1 pb-4">
+            <h3 className="font-bold text-slate-900 mb-3 flex items-center gap-2">
+              <Tag className="h-4 w-4" /> Descripción General
+            </h3>
+            <p className="text-slate-600 text-sm leading-relaxed">
+              Excelente oportunidad en {property.barrio}. Esta propiedad de {property.ambientes} ambientes y {property.superficie} m² 
+              destaca por su ubicación estratégica. Gracias a su GeoScore de {property.geoScore} puntos, se garantiza 
+              un entorno ideal con alta proximidad a los puntos de interés más relevantes para tu estilo de vida.
+            </p>
+          </div>
         </div>
-      </main>
+      </div>
     </div>
   )
 }

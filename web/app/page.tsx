@@ -14,62 +14,69 @@ import { CompareProperties } from "@/components/compare-properties"
 import { FavoritesView } from "@/components/favorites-view"
 import { supabase } from "@/lib/supabase"
 
-const MOCK_PROPERTIES: Property[] = [
-  { 
-    id: "1", titulo: "Depto luminoso con balcón", direccion: "Av. Santa Fe 2500", barrio: "Palermo", precio: 180000, ambientes: 2, banos: 1, superficie: 55, 
-    imagen: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&q=60", 
-    tipoOperacion: "alquiler", destacado: true,
-  },
-  { 
-    id: "2", titulo: "Amplio PH reciclado", direccion: "Av. Cabildo 3800", barrio: "Belgrano", precio: 320000, ambientes: 4, banos: 2, superficie: 120, 
-    imagen: "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&q=60", 
-    tipoOperacion: "venta",
-  },
-  { 
-    id: "3", titulo: "Departamento con vista al río", direccion: "Juana Manso 500", barrio: "Puerto Madero", precio: 450000, ambientes: 3, banos: 2, superficie: 95, 
-    imagen: "https://images.unsplash.com/photo-1493809842364-78817add7ffb?w=800&q=60", 
-    tipoOperacion: "alquiler",
-  }
-]
-
 export default function BuscadorPage() {
   const router = useRouter()
   const [filters, setFilters] = useState<SearchFiltersState | null>(null)
   const [selectedProperty, setSelectedProperty] = useState<string | null>(null)
   
-  // Estados de Sesión
+  const [dbProperties, setDbProperties] = useState<Property[]>([])
+  const [nearbyPois, setNearbyPois] = useState<any[]>([])
+  
   const [user, setUser] = useState<any>(null)
   const [isLoadingSession, setIsLoadingSession] = useState(true)
   
-  // Estados de Módulos (CU)
   const [detailProperty, setDetailProperty] = useState<any | null>(null)
   const [showProfileConfig, setShowProfileConfig] = useState(false)
   const [currentProfile, setCurrentProfile] = useState<LifestyleProfile | null>(null)
   
-  // CU-10 (Comparador)
   const [comparingIds, setComparingIds] = useState<string[]>([])
   const [showCompareView, setShowCompareView] = useState(false)
   
-  // CU-11 (Favoritos)
   const [favoriteIds, setFavoriteIds] = useState<string[]>([])
   const [showFavoritesView, setShowFavoritesView] = useState(false)
   const [toastMsg, setToastMsg] = useState<{title: string, desc: string, type: "success" | "info"} | null>(null)
 
-  // ---------------- LÓGICA DEL BACKEND ----------------
+  // 1. Ahora actualizamos la lista si el usuario cambia de perfil para recalcular los scores
+  useEffect(() => {
+    const fetchInmuebles = async () => {
+      try {
+        const url = currentProfile 
+          ? `http://localhost:8080/api/inmuebles?perfil=${currentProfile}` 
+          : 'http://localhost:8080/api/inmuebles';
+        const res = await fetch(url)
+        if (res.ok) setDbProperties(await res.json())
+      } catch (error) { console.error("Error cargando inmuebles:", error) }
+    }
+    fetchInmuebles()
+  }, [currentProfile])
+
+  // 2. Extraemos los POIs del mapa enviándole el perfil actual
+  useEffect(() => {
+    if (!selectedProperty) {
+      setNearbyPois([])
+      return
+    }
+    const url = `http://localhost:8080/api/inmuebles/${selectedProperty}/analisis${currentProfile ? `?perfil=${currentProfile}` : ''}`
+    
+    fetch(url)
+      .then(res => res.json())
+      .then(data => setNearbyPois(data.poisReales || []))
+      .catch(err => console.error(err))
+  }, [selectedProperty, currentProfile])
 
   const fetchUserProfile = async (userId: string, token: string) => {
     try {
       const res = await fetch(`http://localhost:8080/api/usuarios/${userId}/perfil`, { headers: { 'Authorization': `Bearer ${token}` }})
       if (res.status === 200) setCurrentProfile(await res.text() as LifestyleProfile)
       else setCurrentProfile(null) 
-    } catch (e) { console.error(e); setCurrentProfile(null) }
+    } catch (e) { setCurrentProfile(null) }
   }
 
   const fetchFavorites = async (userId: string, token: string) => {
     try {
       const res = await fetch(`http://localhost:8080/api/favoritos/${userId}`, { headers: { 'Authorization': `Bearer ${token}` }})
       if (res.ok) setFavoriteIds(await res.json())
-    } catch (e) { console.error(e) }
+    } catch (e) {}
   }
 
   useEffect(() => {
@@ -105,20 +112,13 @@ export default function BuscadorPage() {
     return () => authListener.subscription.unsubscribe()
   }, [])
 
-  // ---------------- EVENTOS (HANDLERS) ----------------
-
   const showToast = (title: string, desc: string, type: "success" | "info" = "success") => {
     setToastMsg({ title, desc, type })
     setTimeout(() => setToastMsg(null), 3500)
   }
 
   const handleToggleFavorite = async (propertyId: string, propertyTitle: string = "Inmueble") => {
-    if (!user) {
-      router.push('/login')
-      return;
-    }
-    
-    // Optimistic UI update (se refleja instantáneamente en el front)
+    if (!user) return router.push('/login');
     const isAdding = !favoriteIds.includes(propertyId);
     setFavoriteIds(prev => isAdding ? [...prev, propertyId] : prev.filter(id => id !== propertyId));
     
@@ -132,17 +132,12 @@ export default function BuscadorPage() {
 
       if (res.ok) {
         const result = await res.json()
-        if (result.accion === "agregado") {
-          showToast("Agregado a favoritos", `Se guardó "${propertyTitle}" en tu lista.`, "success")
-        } else {
-          showToast("Removido de favoritos", `Se eliminó "${propertyTitle}" de tu lista.`, "info")
-        }
+        if (result.accion === "agregado") showToast("Agregado a favoritos", `Se guardó "${propertyTitle}" en tu lista.`, "success")
+        else showToast("Removido de favoritos", `Se eliminó "${propertyTitle}" de tu lista.`, "info")
       } else {
-        // Si falla el backend, revertimos el estado
         setFavoriteIds(prev => !isAdding ? [...prev, propertyId] : prev.filter(id => id !== propertyId));
       }
     } catch (e) {
-      console.error(e);
       setFavoriteIds(prev => !isAdding ? [...prev, propertyId] : prev.filter(id => id !== propertyId));
     }
   }
@@ -161,16 +156,28 @@ export default function BuscadorPage() {
   }
 
   const filteredProperties = useMemo(() => {
-    if (!filters) return MOCK_PROPERTIES
-    return MOCK_PROPERTIES.filter(p => p.precio >= filters.precioMin && p.precio <= filters.precioMax && p.tipoOperacion === filters.tipoOperacion)
-  }, [filters])
+    if (!filters) return dbProperties
+    return dbProperties.filter(p => p.precio >= filters.precioMin && p.precio <= filters.precioMax && p.tipoOperacion === filters.tipoOperacion)
+  }, [filters, dbProperties])
 
-  // ---------------- RENDER ----------------
+  // 3. Filtro a prueba de balas para los POIs en el mapa (Sin problemas de mayúsculas o tildes)
+  const filteredPoisForMap = useMemo(() => {
+    if (!currentProfile || nearbyPois.length === 0) return nearbyPois;
+    
+    const mapping: Record<string, string> = {
+      "estudiante": "educacion",
+      "fitness": "deporte",
+      "salud": "salud",
+      "movilidad": "transporte"
+    };
+    
+    const categoriaDeseada = mapping[currentProfile];
+    return nearbyPois.filter(poi => poi.categoria?.toLowerCase() === categoriaDeseada);
+  }, [nearbyPois, currentProfile])
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       
-      {/* Toast Notification global */}
       {toastMsg && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] flex items-start gap-3 bg-slate-900 text-white px-4 py-3 rounded-lg shadow-xl animate-in slide-in-from-top-5">
           {toastMsg.type === "success" ? <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0 mt-0.5" /> : <Info className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" />}
@@ -250,13 +257,14 @@ export default function BuscadorPage() {
 
         {showCompareView ? (
            <CompareProperties 
-             property1={MOCK_PROPERTIES.find(p => p.id === comparingIds[0])}
-             property2={MOCK_PROPERTIES.find(p => p.id === comparingIds[1])}
+             property1={dbProperties.find(p => p.id === comparingIds[0])}
+             property2={dbProperties.find(p => p.id === comparingIds[1])}
+             userProfile={currentProfile} // <-- Pasamos el perfil al comparador
              onClose={() => { setShowCompareView(false); setComparingIds([]); }}
            />
         ) : showFavoritesView ? (
            <FavoritesView 
-             properties={MOCK_PROPERTIES.filter(p => favoriteIds.includes(p.id))}
+             properties={dbProperties.filter(p => favoriteIds.includes(p.id))}
              comparingIds={comparingIds}
              onClose={() => setShowFavoritesView(false)}
              onToggleFavorite={(id, title) => handleToggleFavorite(id, title)}
@@ -269,11 +277,16 @@ export default function BuscadorPage() {
                <SearchFilters onSearch={setFilters} onClear={() => setFilters(null)} />
             </aside>
             <div className="flex-1 flex flex-col gap-8">
-              <div className="h-[400px] rounded-xl border bg-white overflow-hidden p-2">
-                <PropertyMap properties={filteredProperties} selectedProperty={selectedProperty} onPropertySelect={setSelectedProperty} />
+              <div className="h-[400px] rounded-xl border bg-white overflow-hidden p-2 relative z-0">
+                <PropertyMap 
+                  properties={filteredProperties} 
+                  selectedProperty={selectedProperty} 
+                  onPropertySelect={setSelectedProperty} 
+                  nearbyPois={filteredPoisForMap} 
+                />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-slate-800 mb-6">Inmuebles destacados</h2>
+                <h2 className="text-xl font-bold text-slate-800 mb-6">Catálogo de Inmuebles ({filteredProperties.length})</h2>
                 {filteredProperties.length === 0 ? <EmptyResults onClearFilters={() => setFilters(null)} /> : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {filteredProperties.map(p => (

@@ -1,242 +1,181 @@
-'use client'
+"use client"
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { AlertCircle, BookOpen, Dumbbell, Heart, Navigation, CheckCircle2, X } from 'lucide-react'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { useState } from "react"
+import { BookOpen, Dumbbell, Heart, Bus, Check, X, Loader2 } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 
-export type LifestyleProfile = 'student' | 'fitness' | 'health' | 'mobility'
+export type LifestyleProfile = "estudiante" | "fitness" | "salud" | "movilidad"
+
+const PROFILES = [
+  {
+    id: "estudiante",
+    title: "Estudiante",
+    icon: BookOpen,
+    description: "Prioriza inmuebles cercanos a la red de universidades de la Ciudad.",
+    color: "text-blue-500",
+    bgColor: "bg-blue-50",
+    borderColor: "border-blue-200",
+    activeBorder: "border-blue-500 ring-1 ring-blue-500",
+    benefits: [
+      "Cercanía a instituciones educativas",
+      "Reducción de tiempos de viaje a la facultad",
+      "Entorno académico y estudiantil"
+    ],
+    pois: ["Universidades Públicas", "Universidades Privadas"]
+  },
+  {
+    id: "fitness",
+    title: "Fitness",
+    icon: Dumbbell,
+    description: "Busca ubicaciones con fácil acceso a la red de espacios verdes públicos para entrenar.",
+    color: "text-green-500",
+    bgColor: "bg-green-50",
+    borderColor: "border-green-200",
+    activeBorder: "border-green-500 ring-1 ring-green-500",
+    benefits: [
+      "Proximidad a parques y plazas",
+      "Espacios seguros y abiertos para correr",
+      "Entornos saludables para recreación"
+    ],
+    pois: ["Parques", "Plazas", "Espacios Verdes"]
+  },
+  {
+    id: "salud",
+    title: "Salud",
+    icon: Heart,
+    description: "Enfocado en inmuebles con acceso directo a la red de hospitales públicos de la Ciudad.",
+    color: "text-rose-500",
+    bgColor: "bg-rose-50",
+    borderColor: "border-rose-200",
+    activeBorder: "border-rose-500 ring-1 ring-rose-500",
+    benefits: [
+      "Cercanía a hospitales de agudos",
+      "Acceso rápido a emergencias médicas",
+      "Seguridad sanitaria en el entorno"
+    ],
+    pois: ["Hospitales Públicos", "Centros de Salud"]
+  },
+  {
+    id: "movilidad",
+    title: "Movilidad",
+    icon: Bus,
+    description: "Prioriza inmuebles con excelente acceso a la red de transporte subterráneo.",
+    color: "text-yellow-500",
+    bgColor: "bg-yellow-50",
+    borderColor: "border-yellow-200",
+    activeBorder: "border-yellow-500 ring-1 ring-yellow-500",
+    benefits: [
+      "Proximidad a bocas de Subte",
+      "Conexión rápida con toda la red",
+      "Zonas con alto flujo de transporte público"
+    ],
+    pois: ["Estaciones de Subte", "Red Ferroviaria"]
+  }
+]
 
 interface LifestyleProfileFormProps {
-  currentProfile?: LifestyleProfile | null
-  onSave?: (profile: LifestyleProfile) => Promise<void> | void
-  onCancel?: () => void
+  currentProfile: LifestyleProfile | null
+  onCancel: () => void
+  onSave: (profile: LifestyleProfile) => Promise<void>
 }
 
-const profiles = {
-  student: {
-    name: 'Estudiante',
-    icon: BookOpen,
-    color: 'bg-blue-100 text-blue-700',
-    borderColor: 'border-blue-300',
-    description: 'Prioriza inmuebles cercanos a universidades, bibliotecas y espacios de estudio.',
-    benefits: [
-      'Cercanía a instituciones educativas',
-      'Acceso a transportes universitarios',
-      'Zonas seguras y tranquilas',
-      'Proximidad a cafeterías y espacios sociales',
-    ],
-    pois: ['Universidades', 'Bibliotecas', 'Escuelas', 'Centros de estudio'],
-  },
-  fitness: {
-    name: 'Fitness',
-    icon: Dumbbell,
-    color: 'bg-red-100 text-red-700',
-    borderColor: 'border-red-300',
-    description: 'Busca ubicaciones con fácil acceso a gimnasios, parques y espacios para entrenar.',
-    benefits: [
-      'Proximidad a gimnasios y estudios de fitness',
-      'Parques y zonas verdes para ejercicio',
-      'Espacios seguros para correr',
-      'Acceso a piscinas y complejos deportivos',
-    ],
-    pois: ['Gimnasios', 'Parques', 'Piscinas', 'Canchas deportivas'],
-  },
-  health: {
-    name: 'Salud',
-    icon: Heart,
-    color: 'bg-pink-100 text-pink-700',
-    borderColor: 'border-pink-300',
-    description: 'Enfocado en inmuebles con acceso a servicios médicos, farmacias y espacios de bienestar.',
-    benefits: [
-      'Cercanía a hospitales y clínicas',
-      'Acceso rápido a farmacias',
-      'Espacios verdes para bienestar',
-      'Servicios de salud integral',
-    ],
-    pois: ['Hospitales', 'Clínicas', 'Farmacias', 'Centros de salud'],
-  },
-  mobility: {
-    name: 'Movilidad',
-    icon: Navigation,
-    color: 'bg-green-100 text-green-700',
-    borderColor: 'border-green-300',
-    description: 'Prioriza inmuebles con excelente acceso a transporte público y opciones de desplazamiento.',
-    benefits: [
-      'Proximidad a estaciones de transporte',
-      'Múltiples opciones de colectivos',
-      'Acceso a estaciones de tren/subte',
-      'Zonas con buen flujo de tránsito',
-    ],
-    pois: ['Estaciones', 'Paradas de colectivo', 'Ciclovías', 'Estacionamientos'],
-  },
-}
-
-export function LifestyleProfileForm({
-  currentProfile,
-  onSave,
-  onCancel,
-}: LifestyleProfileFormProps) {
-  const router = useRouter()
-  const [selectedProfile, setSelectedProfile] = useState<LifestyleProfile | null>(currentProfile || null)
-  const [isLoading, setIsLoading] = useState(false)
-  const [showSuccess, setShowSuccess] = useState(false)
+export function LifestyleProfileForm({ currentProfile, onCancel, onSave }: LifestyleProfileFormProps) {
+  const [selected, setSelected] = useState<LifestyleProfile | null>(currentProfile)
+  const [isSaving, setIsSaving] = useState(false)
 
   const handleSave = async () => {
-    if (!selectedProfile) return
-
-    setIsLoading(true)
-    
+    if (!selected) return
+    setIsSaving(true)
     try {
-      if (onSave) {
-        await onSave(selectedProfile)
-      } else {
-        await new Promise((resolve) => setTimeout(resolve, 800))
-      }
-      
-      setShowSuccess(true)
-      
-      setTimeout(() => {
-        if (onCancel) onCancel() // Cerramos el formulario si es un modal
-        router.push('/')
-      }, 1500)
-      
-    } catch (error) {
-      console.error("Error al guardar el perfil:", error)
+      await onSave(selected)
     } finally {
-      setIsLoading(false)
+      setIsSaving(false)
     }
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto space-y-6">
-      <div className="space-y-2">
-        <h1 className="text-3xl font-bold text-foreground">Mi Perfil de Estilo de Vida</h1>
-        <p className="text-muted-foreground">
-          Selecciona tu perfil predominante para personalizar las búsquedas de inmuebles. El sistema priorizará los Puntos de Interés (POIs) según tu preferencia.
+    <div className="w-full max-w-5xl bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border">
+      
+      {/* Cabecera */}
+      <div className="p-8 border-b bg-slate-50/50">
+        <h2 className="text-3xl font-extrabold tracking-tight text-slate-900 mb-2">Mi Perfil de Estilo de Vida</h2>
+        <p className="text-slate-600 max-w-3xl leading-relaxed">
+          Selecciona tu perfil predominante para personalizar las búsquedas de inmuebles. El sistema priorizará los Puntos de Interés (POIs) reales de BA Data según tu preferencia.
         </p>
       </div>
 
-      {currentProfile && (
-        <Alert className="border-amber-200 bg-amber-50">
-          <AlertCircle className="h-4 w-4 text-amber-600" />
-          <AlertDescription className="text-amber-900">
-            Tu perfil actual es <strong>{profiles[currentProfile].name}</strong>. Puedes cambiar esta configuración en cualquier momento.
-          </AlertDescription>
-        </Alert>
-      )}
+      {/* Grilla de Opciones */}
+      <div className="p-8 bg-white grid grid-cols-1 md:grid-cols-2 gap-6 overflow-y-auto max-h-[60vh]">
+        {PROFILES.map((profile) => {
+          const Icon = profile.icon
+          const isSelected = selected === profile.id
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {(Object.entries(profiles) as [LifestyleProfile, typeof profiles[LifestyleProfile]][]).map(
-          ([key, profile]) => {
-            const Icon = profile.icon
-            const isSelected = selectedProfile === key
-            const isCurrent = currentProfile === key
-
-            return (
-              <div
-                key={key}
-                onClick={() => setSelectedProfile(key)}
-                className={`cursor-pointer transition-all ${
-                  isSelected || isCurrent ? 'ring-2 ring-primary' : ''
-                }`}
-              >
-                <Card
-                  className={`h-full hover:shadow-lg transition-shadow ${
-                    isCurrent ? `border-2 ${profile.borderColor}` : ''
-                  } ${isSelected ? 'bg-primary/5' : ''}`}
-                >
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-3">
-                          <div className={`p-2 rounded-lg ${profile.color}`}>
-                            <Icon className="h-5 w-5" />
-                          </div>
-                          <CardTitle className="text-xl">{profile.name}</CardTitle>
-                        </div>
-                        {isCurrent && (
-                          <Badge className="w-fit">Perfil Actual</Badge>
-                        )}
-                      </div>
-                      {isSelected && (
-                        <div className="text-primary">
-                          <CheckCircle2 className="h-6 w-6" />
-                        </div>
-                      )}
-                    </div>
-                    <CardDescription className="text-sm">
-                      {profile.description}
-                    </CardDescription>
-                  </CardHeader>
-
-                  <CardContent className="space-y-4">
-                    <div>
-                      <p className="text-xs font-semibold text-foreground mb-2">
-                        Beneficios:
-                      </p>
-                      <ul className="space-y-1">
-                        {profile.benefits.map((benefit) => (
-                          <li
-                            key={benefit}
-                            className="text-xs text-muted-foreground flex items-start gap-2"
-                          >
-                            <span className="text-primary mt-0.5">•</span>
-                            {benefit}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    <div>
-                      <p className="text-xs font-semibold text-foreground mb-2">
-                        POIs Priorizados:
-                      </p>
-                      <div className="flex flex-wrap gap-1">
-                        {profile.pois.map((poi) => (
-                          <Badge key={poi} variant="secondary" className="text-xs">
-                            {poi}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+          return (
+            <div 
+              key={profile.id}
+              onClick={() => setSelected(profile.id as LifestyleProfile)}
+              className={cn(
+                "relative flex flex-col p-6 rounded-xl border-2 cursor-pointer transition-all duration-200 hover:shadow-md",
+                isSelected ? profile.activeBorder : "border-slate-100 hover:border-slate-300"
+              )}
+            >
+              {/* Check de seleccionado */}
+              {isSelected && (
+                <div className="absolute top-4 right-4 bg-primary text-white rounded-full p-1">
+                  <Check className="h-4 w-4" />
+                </div>
+              )}
+              
+              {/* Encabezado Tarjeta */}
+              <div className="flex items-center gap-3 mb-3">
+                <div className={cn("p-2.5 rounded-xl", profile.bgColor)}>
+                  <Icon className={cn("h-6 w-6", profile.color)} />
+                </div>
+                <h3 className="text-xl font-bold text-slate-800">{profile.title}</h3>
               </div>
-            )
-          }
-        )}
+              
+              <p className="text-sm text-slate-600 mb-5">{profile.description}</p>
+              
+              <div className="mb-5 flex-1">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 mb-3">Beneficios:</h4>
+                <ul className="space-y-2">
+                  {profile.benefits.map((benefit, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
+                      <span className={cn("mt-1.5 h-1.5 w-1.5 rounded-full shrink-0", profile.bgColor, profile.color.replace('text-', 'bg-'))} />
+                      {benefit}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="pt-4 border-t border-slate-100">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 mb-3">POIs Priorizados:</h4>
+                <div className="flex flex-wrap gap-2">
+                  {profile.pois.map((poi, i) => (
+                    <span key={i} className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
+                      {poi}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )
+        })}
       </div>
 
-      {showSuccess && (
-        <Alert className="border-green-200 bg-green-50 animate-in fade-in">
-          <CheckCircle2 className="h-4 w-4 text-green-600" />
-          <AlertDescription className="text-green-900">
-            ¡Perfil actualizado exitosamente! Redirigiéndote a la búsqueda de inmuebles...
-          </AlertDescription>
-        </Alert>
-      )}
-
-      <div className="flex gap-3 justify-end pt-4 border-t">
-        <Button variant="outline" onClick={onCancel} disabled={isLoading}>
-          <X className="h-4 w-4 mr-2" />
-          Cancelar
+      {/* Footer de Acciones */}
+      <div className="p-6 border-t bg-slate-50 flex items-center justify-end gap-3">
+        <Button variant="outline" onClick={onCancel} disabled={isSaving} className="gap-2">
+          <X className="h-4 w-4" /> Cancelar
         </Button>
-        <Button
-          onClick={handleSave}
-          disabled={!selectedProfile || isLoading || showSuccess}
-          className="gap-2"
-        >
-          {isLoading ? (
+        <Button onClick={handleSave} disabled={!selected || isSaving} className="min-w-[140px]">
+          {isSaving ? (
             <>
-              <div className="h-4 w-4 rounded-full border-2 border-primary-foreground border-t-transparent animate-spin" />
-              Guardando...
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Guardando...
             </>
           ) : (
-            'Guardar Perfil'
+            "Guardar Perfil"
           )}
         </Button>
       </div>

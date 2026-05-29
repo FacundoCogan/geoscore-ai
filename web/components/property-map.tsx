@@ -1,98 +1,96 @@
 "use client"
 
-import { useRef, useState } from "react"
-import { MapPin, ZoomIn, ZoomOut, Locate, Layers } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
-import type { Property } from "./property-card"
+import { useEffect, useState } from "react"
+import dynamic from "next/dynamic"
+import { Property } from "@/components/property-card"
+import { Loader2 } from "lucide-react"
 
-const BARRIO_COORDS: Record<string, { lat: number; lng: number }> = {
-  "Palermo": { lat: -34.5875, lng: -58.4250 },
-  "Belgrano": { lat: -34.5550, lng: -58.4550 },
+const MapContainer = dynamic(() => import("react-leaflet").then((mod) => mod.MapContainer), { ssr: false })
+const TileLayer = dynamic(() => import("react-leaflet").then((mod) => mod.TileLayer), { ssr: false })
+const Marker = dynamic(() => import("react-leaflet").then((mod) => mod.Marker), { ssr: false })
+const Popup = dynamic(() => import("react-leaflet").then((mod) => mod.Popup), { ssr: false })
+
+import "leaflet/dist/leaflet.css"
+
+interface PropertyMapProps {
+  properties: Property[];
+  selectedProperty: string | null;
+  onPropertySelect: (id: string) => void;
+  nearbyPois?: any[]; // Recibimos los POIs
 }
 
-export function PropertyMap({ properties, selectedProperty, onPropertySelect, center = { lat: -34.6037, lng: -58.3816 }, hasError = false }: any) {
-  const mapRef = useRef<HTMLDivElement>(null)
-  const [zoom, setZoom] = useState(12)
+export function PropertyMap({ properties, selectedProperty, onPropertySelect, nearbyPois = [] }: PropertyMapProps) {
+  const [isMounted, setIsMounted] = useState(false)
+  const [L, setL] = useState<any>(null)
 
-  const getPropertyPosition = (property: Property) => {
-    return BARRIO_COORDS[property.barrio] || center
+  useEffect(() => {
+    setIsMounted(true)
+    import("leaflet").then((leaflet) => {
+      delete (leaflet.Icon.Default.prototype as any)._getIconUrl;
+      leaflet.Icon.Default.mergeOptions({
+        iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+        iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+        shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+      });
+      setL(leaflet)
+    })
+  }, [])
+
+  if (!isMounted || !L) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-slate-50 text-slate-400 rounded-xl border">
+        <Loader2 className="h-8 w-8 animate-spin mb-2" />
+      </div>
+    )
   }
 
-  const latLngToPixel = (lat: number, lng: number) => {
-    if (!mapRef.current) return { x: 0, y: 0 }
-    const mapWidth = mapRef.current.offsetWidth
-    const mapHeight = mapRef.current.offsetHeight
-    const scale = Math.pow(2, zoom - 10) * 100
-    return { 
-      x: mapWidth / 2 + (lng - center.lng) * scale, 
-      y: mapHeight / 2 - (lat - center.lat) * scale 
-    }
+  // Función para crear pines de colores para los POIs
+  const createPoiIcon = (categoria: string) => {
+    let color = '#3b82f6'; // Educación (Azul)
+    if(categoria === 'Salud') color = '#ef4444'; // Rojo
+    if(categoria === 'Transporte') color = '#eab308'; // Amarillo
+    if(categoria === 'Deporte') color = '#22c55e'; // Verde
+
+    return L.divIcon({
+      className: 'custom-poi',
+      html: `<div style="background-color: ${color}; width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.4);"></div>`,
+      iconSize: [14, 14],
+      iconAnchor: [7, 7]
+    })
   }
 
-  if (hasError) {
-    return <div className="w-full h-full bg-slate-50 flex items-center justify-center text-slate-400">Error cargando mapa</div>
-  }
+  const defaultCenter: [number, number] = [-34.6037, -58.3816]
 
   return (
-    <div className="relative w-full h-full bg-slate-50 rounded-lg overflow-hidden">
-      {/* Fondo de cuadrícula estilo diseño */}
-      <div 
-        className="absolute inset-0 opacity-20 pointer-events-none"
-        style={{
-          backgroundImage: `linear-gradient(#cbd5e1 1px, transparent 1px), linear-gradient(90deg, #cbd5e1 1px, transparent 1px)`,
-          backgroundSize: '100px 100px',
-          backgroundPosition: 'center center'
-        }}
-      />
+    <MapContainer center={defaultCenter} zoom={12} className="w-full h-full rounded-xl z-0">
+      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
       
-      {/* Líneas principales de la cuadrícula */}
-       <div className="absolute inset-0 opacity-30 pointer-events-none flex flex-col justify-evenly">
-          <div className="w-full h-[1px] bg-slate-400"></div>
-          <div className="w-full h-[1px] bg-slate-400"></div>
-       </div>
-       <div className="absolute inset-0 opacity-30 pointer-events-none flex justify-evenly">
-          <div className="h-full w-[1px] bg-slate-400"></div>
-          <div className="h-full w-[1px] bg-slate-400"></div>
-       </div>
+      {/* Dibujamos los Inmuebles (Pines Azules Grandes) */}
+      {properties.map((prop) => {
+        if (!prop.lat || !prop.lng) return null;
+        return (
+          <Marker key={prop.id} position={[prop.lat, prop.lng]} eventHandlers={{ click: () => onPropertySelect(prop.id) }}>
+            <Popup>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-bold text-slate-800">{prop.titulo}</span>
+                <span className="text-sm text-primary font-bold">${prop.precio.toLocaleString("es-AR")}</span>
+              </div>
+            </Popup>
+          </Marker>
+        )
+      })}
 
-      <div ref={mapRef} className="absolute inset-0">
-        {properties.map((property: any) => {
-          const coords = getPropertyPosition(property)
-          const pos = latLngToPixel(coords.lat, coords.lng)
-          const isSelected = selectedProperty === property.id
-
-          return (
-            <div key={property.id} className="absolute" style={{ left: pos.x, top: pos.y }}>
-               {/* Círculo tenue detrás del pin seleccionado */}
-               {isSelected && (
-                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-blue-100/50 rounded-full border border-blue-200"></div>
-               )}
-              <button 
-                onClick={() => onPropertySelect?.(property.id)}
-                className={cn(
-                  "absolute flex items-center justify-center rounded-full transition-all -translate-x-1/2 -translate-y-1/2",
-                  isSelected ? "bg-primary border-2 border-white w-8 h-8 z-10 shadow-md" : "bg-white border-2 border-primary w-6 h-6 hover:scale-110 shadow-sm"
-                )}
-              >
-                <MapPin className={cn("h-4 w-4", isSelected ? "text-white" : "text-primary")} />
-              </button>
+      {/* Dibujamos los POIs Reales (Puntitos de colores) solo si hay una propiedad seleccionada */}
+      {nearbyPois.map((poi, idx) => (
+        <Marker key={`poi-${idx}`} position={[poi.lat, poi.lng]} icon={createPoiIcon(poi.categoria)}>
+          <Popup>
+            <div className="text-xs">
+              <span className="font-bold">{poi.nombre}</span><br/>
+              <span className="text-muted-foreground">{poi.tipo} ({Math.round(poi.distancia)}m)</span>
             </div>
-          )
-        })}
-      </div>
-
-      <div className="absolute bottom-4 right-4 flex flex-col gap-2">
-        <Button size="icon" variant="outline" onClick={() => setZoom(z => z + 1)} className="bg-white/80 backdrop-blur-sm shadow-sm h-8 w-8 text-slate-600"><ZoomIn className="h-4 w-4" /></Button>
-        <Button size="icon" variant="outline" onClick={() => setZoom(z => z - 1)} className="bg-white/80 backdrop-blur-sm shadow-sm h-8 w-8 text-slate-600"><ZoomOut className="h-4 w-4" /></Button>
-        <Button size="icon" variant="outline" className="bg-white/80 backdrop-blur-sm shadow-sm h-8 w-8 text-slate-600"><Locate className="h-4 w-4" /></Button>
-      </div>
-      
-      <div className="absolute bottom-4 left-4">
-        <div className="bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-md shadow-sm border border-slate-200 flex items-center gap-2 text-xs font-medium text-slate-600">
-           <Layers className="h-3.5 w-3.5" /> Mapa
-        </div>
-      </div>
-    </div>
+          </Popup>
+        </Marker>
+      ))}
+    </MapContainer>
   )
 }
