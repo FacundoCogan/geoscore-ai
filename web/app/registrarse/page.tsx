@@ -116,13 +116,13 @@ export default function RegistrarsePage() {
               onCancel={handleCancel}
             />
 
-            {/* Beneficios de registrarse */}
+            {/* Beneficios de registrarse reales */}
             <div className="mt-6 text-center text-sm text-muted-foreground">
               <p className="mb-3">Al registrarte en GeoScore podrás:</p>
               <div className="flex flex-wrap justify-center gap-2">
-                <span className="px-3 py-1 bg-background border border-border/50 shadow-sm rounded-full text-xs">Guardar favoritos</span>
-                <span className="px-3 py-1 bg-background border border-border/50 shadow-sm rounded-full text-xs">Historial de análisis</span>
-                <span className="px-3 py-1 bg-background border border-border/50 shadow-sm rounded-full text-xs">Perfil predictivo</span>
+                <span className="px-3 py-1 bg-background border border-border/50 shadow-sm rounded-full text-xs font-medium">Guardar favoritos</span>
+                <span className="px-3 py-1 bg-background border border-border/50 shadow-sm rounded-full text-xs font-medium">Comparar inmuebles</span>
+                <span className="px-3 py-1 bg-background border border-border/50 shadow-sm rounded-full text-xs font-medium">GeoScore de entorno</span>
               </div>
             </div>
           </div>

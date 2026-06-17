@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useCallback } from "react"
-import { supabase } from "@/lib/supabase" // <-- Importamos Supabase
-import { Eye, EyeOff, Check, X, Mail, User, Lock, AlertCircle, Loader2 } from "lucide-react"
+import { supabase } from "@/lib/supabase" 
+import { Eye, EyeOff, Check, X, Mail, User, Lock, AlertCircle, Loader2, Shield, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -19,6 +19,7 @@ interface FormData {
   email: string
   password: string
   confirmPassword: string
+  rol: string
 }
 
 interface ValidationState {
@@ -34,13 +35,11 @@ interface PasswordRequirements {
   hasNumber: boolean
 }
 
-// Validar formato de email
 function isValidEmail(email: string): boolean {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   return emailRegex.test(email)
 }
 
-// Validar requisitos de contraseña
 function checkPasswordRequirements(password: string): PasswordRequirements {
   return {
     minLength: password.length >= 8,
@@ -63,6 +62,7 @@ export function RegisterForm({
     email: "",
     password: "",
     confirmPassword: "",
+    rol: "Usuario",
   })
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
@@ -72,10 +72,10 @@ export function RegisterForm({
     email: false,
     password: false,
     confirmPassword: false,
+    rol: false,
   })
   const [submitError, setSubmitError] = useState<string | null>(null)
 
-  // Validación en tiempo real
   const validation: ValidationState = {
     nombre: {
       valid: formData.nombre.trim().length >= 2,
@@ -115,6 +115,7 @@ export function RegisterForm({
       email: true,
       password: true,
       confirmPassword: true,
+      rol: true,
     })
 
     if (!isFormValid) return
@@ -123,19 +124,17 @@ export function RegisterForm({
     setSubmitError(null)
 
     try {
-      // 1. Llamada real a Supabase para registrar usuario
-      const { data, error: signUpError } = await supabase.auth.signUp({
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
           data: {
-            full_name: formData.nombre, // Guardamos el nombre en los metadatos de Supabase
+            full_name: formData.nombre,
           }
         }
       })
 
       if (signUpError) {
-        // Manejo de errores comunes de Supabase
         if (signUpError.message.includes('already registered') || signUpError.status === 422) {
           setSubmitError("El correo electrónico ya está en uso")
         } else {
@@ -145,17 +144,32 @@ export function RegisterForm({
         return
       }
 
-      // Registro exitoso
+      if (!authData.user) throw new Error("Error desconocido al crear la cuenta.")
+
+      const res = await fetch("http://localhost:8080/api/usuarios/registro", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: authData.user.id,        
+          nombre: formData.nombre,     
+          email: formData.email,       
+          rol: formData.rol            
+        })
+      })
+
+      if (!res.ok) {
+        throw new Error("La cuenta se creó, pero falló la sincronización con la base de datos.")
+      }
+
       setIsSubmitting(false)
       onRegisterSuccess?.({ name: formData.nombre, email: formData.email })
 
-    } catch (err) {
-      setSubmitError("Ocurrió un error al intentar conectar con el servidor.")
+    } catch (err: any) {
+      setSubmitError(err.message || "Ocurrió un error al intentar conectar con el servidor.")
       setIsSubmitting(false)
     }
   }
 
-  // Componente de indicador de validación
   const ValidationIndicator = ({ isValid, show }: { isValid: boolean; show: boolean }) => {
     if (!show) return null
     return isValid ? (
@@ -165,7 +179,6 @@ export function RegisterForm({
     )
   }
 
-  // Componente de requisito de contraseña
   const PasswordRequirement = ({ met, text }: { met: boolean; text: string }) => (
     <div className={cn("flex items-center gap-2 text-xs", met ? "text-primary" : "text-muted-foreground")}>
       {met ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
@@ -298,10 +311,35 @@ export function RegisterForm({
             </div>
             {touched.confirmPassword && !validation.confirmPassword.valid && <p className="text-xs text-destructive">{validation.confirmPassword.message}</p>}
           </div>
+
+          {/* FIX DEFINITIVO: Estilos en línea para forzar el padding ignorando Tailwind */}
+          <div className="space-y-2">
+            <label htmlFor="rol" className="text-sm font-medium leading-none">Tipo de Perfil</label>
+            <div className="relative">
+              <Shield className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <select
+                id="rol"
+                className="appearance-none w-full h-11 rounded-lg border border-input bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+                style={{ paddingLeft: "2.5rem", paddingRight: "2.5rem" }}
+                value={formData.rol}
+                onChange={e => handleInputChange("rol", e.target.value)}
+                disabled={isSubmitting}
+              >
+                <option value="Usuario">Usuario Buscador</option>
+                <option value="Inmobiliaria">Agente Inmobiliario</option>
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            </div>
+          </div>
+
         </CardContent>
 
         <CardFooter className="flex flex-col gap-4 pt-2">
-          <Button type="submit" className="w-full h-11 text-base font-medium rounded-lg" disabled={!isFormValid || isSubmitting}>
+          <Button 
+            type="submit" 
+            className="w-full h-11 text-base font-medium rounded-lg mt-6 bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all" 
+            disabled={!isFormValid || isSubmitting}
+          >
             {isSubmitting ? (
               <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Registrando...</>
             ) : "Crear Cuenta"}

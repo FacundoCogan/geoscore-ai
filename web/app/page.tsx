@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Map, UserCircle, Scale, Heart, CheckCircle2, Info } from "lucide-react"
+import { Map, UserCircle, Scale, Heart, CheckCircle2, Info, Shield, Building, Bell, Trash2, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SearchFilters, type SearchFiltersState } from "@/components/search-filters"
 import { PropertyCard, type Property } from "@/components/property-card"
@@ -23,6 +23,7 @@ export default function BuscadorPage() {
   const [nearbyPois, setNearbyPois] = useState<any[]>([])
   
   const [user, setUser] = useState<any>(null)
+  const [systemRole, setSystemRole] = useState<string>("Usuario") 
   const [isLoadingSession, setIsLoadingSession] = useState(true)
   
   const [detailProperty, setDetailProperty] = useState<any | null>(null)
@@ -34,49 +35,69 @@ export default function BuscadorPage() {
   
   const [favoriteIds, setFavoriteIds] = useState<string[]>([])
   const [showFavoritesView, setShowFavoritesView] = useState(false)
-  const [toastMsg, setToastMsg] = useState<{title: string, desc: string, type: "success" | "info"} | null>(null)
+  const [toastMsg, setToastMsg] = useState<{title: string, desc: string, type: "success" | "info" | "error"} | null>(null)
 
-  // 1. Ahora actualizamos la lista si el usuario cambia de perfil para recalcular los scores
+  const [notifications, setNotifications] = useState<any[]>([])
+  const [showNotis, setShowNotis] = useState(false)
+
   useEffect(() => {
     const fetchInmuebles = async () => {
       try {
-        const url = currentProfile 
-          ? `http://localhost:8080/api/inmuebles?perfil=${currentProfile}` 
-          : 'http://localhost:8080/api/inmuebles';
-        const res = await fetch(url)
-        if (res.ok) setDbProperties(await res.json())
-      } catch (error) { console.error("Error cargando inmuebles:", error) }
+        const url = currentProfile ? `http://localhost:8080/api/inmuebles?perfil=${currentProfile}&t=${Date.now()}` : `http://localhost:8080/api/inmuebles?t=${Date.now()}`;
+        const res = await fetch(url, { cache: 'no-store' })
+        if (res.ok) {
+          const data = await res.json()
+          setDbProperties(data) 
+        }
+      } catch (error) { 
+        console.warn("Backend offline") 
+      }
     }
     fetchInmuebles()
   }, [currentProfile])
 
-  // 2. Extraemos los POIs del mapa enviándole el perfil actual
   useEffect(() => {
-    if (!selectedProperty) {
-      setNearbyPois([])
-      return
-    }
+    if (!selectedProperty) { setNearbyPois([]); return; }
     const url = `http://localhost:8080/api/inmuebles/${selectedProperty}/analisis${currentProfile ? `?perfil=${currentProfile}` : ''}`
-    
-    fetch(url)
-      .then(res => res.json())
-      .then(data => setNearbyPois(data.poisReales || []))
-      .catch(err => console.error(err))
+    fetch(url).then(res => res.json()).then(data => setNearbyPois(data.poisReales || [])).catch(err => console.error(err))
   }, [selectedProperty, currentProfile])
 
-  const fetchUserProfile = async (userId: string, token: string) => {
+  const fetchUserProfile = async (userId: string) => {
     try {
-      const res = await fetch(`http://localhost:8080/api/usuarios/${userId}/perfil`, { headers: { 'Authorization': `Bearer ${token}` }})
+      const res = await fetch(`http://localhost:8080/api/usuarios/${userId}/perfil`)
       if (res.status === 200) setCurrentProfile(await res.text() as LifestyleProfile)
       else setCurrentProfile(null) 
     } catch (e) { setCurrentProfile(null) }
   }
 
-  const fetchFavorites = async (userId: string, token: string) => {
+  const fetchFavorites = async (userId: string) => {
     try {
-      const res = await fetch(`http://localhost:8080/api/favoritos/${userId}`, { headers: { 'Authorization': `Bearer ${token}` }})
+      const res = await fetch(`http://localhost:8080/api/favoritos/${userId}`)
       if (res.ok) setFavoriteIds(await res.json())
     } catch (e) {}
+  }
+
+  const fetchNotis = async (email: string) => {
+    try {
+      const res = await fetch(`http://localhost:8080/api/notificaciones/${email}?t=${Date.now()}`, { cache: 'no-store' })
+      if (res.ok) setNotifications(await res.json())
+    } catch (e) {}
+  }
+
+  const handleReadNoti = async (id: number) => {
+    try {
+      await fetch(`http://localhost:8080/api/notificaciones/${id}/leer`, { method: 'PUT' })
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, leida: true } : n))
+      router.push('/admin')
+    } catch (e) {}
+  }
+
+  const handleDeleteNoti = async (e: React.MouseEvent, id: number) => {
+    e.stopPropagation();
+    try {
+      await fetch(`http://localhost:8080/api/notificaciones/${id}`, { method: 'DELETE' })
+      setNotifications(prev => prev.filter(n => n.id !== id))
+    } catch (err) {}
   }
 
   useEffect(() => {
@@ -85,9 +106,22 @@ export default function BuscadorPage() {
         const { data: { session } } = await supabase.auth.getSession()
         if (session?.user) {
           setUser(session.user)
+          try {
+            const resUsuarios = await fetch('http://localhost:8080/api/admin/usuarios')
+            if (resUsuarios.ok) {
+              const users = await resUsuarios.json()
+              const me = users.find((u: any) => u.email === session.user.email)
+              if (me) {
+                const rolNormalizado = (me.rol === "Agente Inmobiliario") ? "Inmobiliaria" : me.rol;
+                setSystemRole(rolNormalizado);
+              }
+            }
+          } catch (e) {}
+
           await Promise.all([
-            fetchUserProfile(session.user.id, session.access_token),
-            fetchFavorites(session.user.id, session.access_token)
+            fetchUserProfile(session.user.id),
+            fetchFavorites(session.user.id),
+            fetchNotis(session.user.email || "")
           ])
         }
       } finally { setIsLoadingSession(false) }
@@ -95,26 +129,22 @@ export default function BuscadorPage() {
     checkUser()
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      try {
-        if (session?.user) {
-          setUser(session.user)
-          await Promise.all([
-            fetchUserProfile(session.user.id, session.access_token),
-            fetchFavorites(session.user.id, session.access_token)
-          ])
-        } else {
-          setUser(null)
-          setCurrentProfile(null)
-          setFavoriteIds([])
-        }
-      } finally { setIsLoadingSession(false) }
+      if (session?.user) {
+        setUser(session.user)
+        fetchNotis(session.user.email || "")
+      } else {
+        setUser(null)
+        setSystemRole("Usuario")
+        setNotifications([])
+      }
     })
     return () => authListener.subscription.unsubscribe()
   }, [])
 
-  const showToast = (title: string, desc: string, type: "success" | "info" = "success") => {
-    setToastMsg({ title, desc, type })
-    setTimeout(() => setToastMsg(null), 3500)
+  const unreadNotis = notifications.filter(n => !n.leida).length;
+
+  const showToast = (title: string, desc: string, type: "success" | "info" | "error" = "success") => {
+    setToastMsg({ title, desc, type }); setTimeout(() => setToastMsg(null), 3500)
   }
 
   const handleToggleFavorite = async (propertyId: string, propertyTitle: string = "Inmueble") => {
@@ -123,17 +153,16 @@ export default function BuscadorPage() {
     setFavoriteIds(prev => isAdding ? [...prev, propertyId] : prev.filter(id => id !== propertyId));
     
     try {
-      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch('http://localhost:8080/api/favoritos/toggle', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, inmuebleId: propertyId })
       })
 
       if (res.ok) {
         const result = await res.json()
-        if (result.accion === "agregado") showToast("Agregado a favoritos", `Se guardó "${propertyTitle}" en tu lista.`, "success")
-        else showToast("Removido de favoritos", `Se eliminó "${propertyTitle}" de tu lista.`, "info")
+        if (result.accion === "agregado") showToast("Agregado a favoritos", `Se guardó "${propertyTitle}".`, "success")
+        else showToast("Removido de favoritos", `Se eliminó "${propertyTitle}".`, "info")
       } else {
         setFavoriteIds(prev => !isAdding ? [...prev, propertyId] : prev.filter(id => id !== propertyId));
       }
@@ -157,22 +186,37 @@ export default function BuscadorPage() {
 
   const filteredProperties = useMemo(() => {
     if (!filters) return dbProperties
-    return dbProperties.filter(p => p.precio >= filters.precioMin && p.precio <= filters.precioMax && p.tipoOperacion === filters.tipoOperacion)
+    
+    return dbProperties.filter(p => {
+      if (p.tipoOperacion.toLowerCase() !== filters.tipoOperacion.toLowerCase()) return false;
+      if (p.precio > filters.precioMax) return false;
+      
+      if (filters.ambientes && filters.ambientes !== 'Todos') {
+        const ambReq = filters.ambientes;
+        if (ambReq.includes('+')) {
+          const minAmb = parseInt(ambReq.replace('+', ''));
+          if (p.ambientes < minAmb) return false;
+        } else {
+          if (p.ambientes !== parseInt(ambReq)) return false;
+        }
+      }
+      
+      if (filters.ubicacion && filters.ubicacion.trim() !== '') {
+        const searchWords = filters.ubicacion.toLowerCase().trim().split(/[\s,]+/);
+        const fullAddress = `${p.direccion || ''} ${p.barrio || ''}`.toLowerCase();
+        const matchesAllWords = searchWords.every(word => fullAddress.includes(word));
+        
+        if (!matchesAllWords) return false;
+      }
+      
+      return true;
+    });
   }, [filters, dbProperties])
 
-  // 3. Filtro a prueba de balas para los POIs en el mapa (Sin problemas de mayúsculas o tildes)
   const filteredPoisForMap = useMemo(() => {
     if (!currentProfile || nearbyPois.length === 0) return nearbyPois;
-    
-    const mapping: Record<string, string> = {
-      "estudiante": "educacion",
-      "fitness": "deporte",
-      "salud": "salud",
-      "movilidad": "transporte"
-    };
-    
-    const categoriaDeseada = mapping[currentProfile];
-    return nearbyPois.filter(poi => poi.categoria?.toLowerCase() === categoriaDeseada);
+    const mapping: Record<string, string> = { "estudiante": "educacion", "fitness": "deporte", "salud": "salud", "movilidad": "transporte" };
+    return nearbyPois.filter(poi => poi.categoria?.toLowerCase() === mapping[currentProfile]);
   }, [nearbyPois, currentProfile])
 
   return (
@@ -180,7 +224,7 @@ export default function BuscadorPage() {
       
       {toastMsg && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] flex items-start gap-3 bg-slate-900 text-white px-4 py-3 rounded-lg shadow-xl animate-in slide-in-from-top-5">
-          {toastMsg.type === "success" ? <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0 mt-0.5" /> : <Info className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" />}
+          {toastMsg.type === "error" ? <XCircle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" /> : toastMsg.type === "success" ? <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0 mt-0.5" /> : <Info className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" />}
           <div className="flex flex-col gap-1"><span className="text-sm font-semibold">{toastMsg.title}</span><span className="text-xs opacity-90">{toastMsg.desc}</span></div>
         </div>
       )}
@@ -191,26 +235,30 @@ export default function BuscadorPage() {
             currentProfile={currentProfile}
             onCancel={() => setShowProfileConfig(false)}
             onSave={async (profile) => {
-              const { data: { session } } = await supabase.auth.getSession()
-              await fetch('http://localhost:8080/api/usuarios/perfil', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-                body: JSON.stringify({ userId: user.id, profile })
-              })
-              setCurrentProfile(profile)
-              setShowProfileConfig(false)
+              try {
+                const res = await fetch('http://localhost:8080/api/usuarios/perfil', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ userId: user.id, profile })
+                })
+                
+                if(res.ok) {
+                  setCurrentProfile(profile)
+                  setShowProfileConfig(false)
+                  showToast("Perfil actualizado", "Preferencias guardadas en la base de datos.", "success")
+                } else {
+                  showToast("No se pudo guardar", "Verificá que el backend esté corriendo.", "error")
+                }
+              } catch (e) {
+                showToast("Error de red", "No se pudo contactar al servidor de Java.", "error")
+              }
             }}
           />
         </div>
       )}
 
       {detailProperty && (
-        <PropertyDetailView 
-          property={detailProperty}
-          isRegisteredUser={!!user}
-          userProfile={currentProfile}
-          onClose={() => setDetailProperty(null)}
-        />
+        <PropertyDetailView property={detailProperty} isRegisteredUser={!!user} userProfile={currentProfile} onClose={() => setDetailProperty(null)} />
       )}
 
       <header className="border-b bg-white sticky top-0 z-40">
@@ -224,15 +272,62 @@ export default function BuscadorPage() {
              {isLoadingSession ? (
                 <div className="h-8 w-24 bg-slate-200 animate-pulse rounded-md"></div>
               ) : user ? (
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-medium text-slate-600 hidden md:block">{user.email}</span>
+                <div className="flex items-center gap-3 relative">
+                  
+                  <div className="relative">
+                    <Button variant="ghost" size="icon" className="relative text-slate-600 hover:bg-slate-100 rounded-full" onClick={() => setShowNotis(!showNotis)}>
+                       <Bell className="h-5 w-5" />
+                       {unreadNotis > 0 && <span className="absolute top-1 right-1.5 h-2.5 w-2.5 bg-red-500 rounded-full border-2 border-white"></span>}
+                    </Button>
+                    
+                    {showNotis && (
+                       <div className="absolute top-full right-0 mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                          <div className="p-3 bg-slate-50 border-b font-bold text-sm text-slate-800 flex justify-between items-center">
+                            Notificaciones {unreadNotis > 0 && <span className="bg-red-500 text-white px-2 py-0.5 rounded-full text-[10px]">{unreadNotis}</span>}
+                          </div>
+                          <div className="max-h-80 overflow-y-auto">
+                             {notifications.length === 0 ? (
+                               <div className="p-6 text-xs text-slate-500 text-center">No hay novedades por ahora.</div> 
+                             ) : (
+                                notifications.map(n => (
+                                   <div key={n.id} onClick={() => handleReadNoti(n.id)} className={`p-4 border-b text-xs cursor-pointer transition-colors hover:bg-slate-50 flex justify-between items-start gap-3 ${n.leida ? 'opacity-70 bg-white' : 'bg-blue-50/40 font-medium'}`}>
+                                      <div className="flex-1">
+                                        {n.mensaje}
+                                        <div className="text-[10px] text-slate-400 mt-1">{new Date(n.fecha).toLocaleDateString()}</div>
+                                      </div>
+                                      {/* Tacho de basura siempre visible */}
+                                      <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-red-500 hover:bg-red-50 shrink-0" onClick={(e) => handleDeleteNoti(e, n.id)}>
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                   </div>
+                                ))
+                             )}
+                          </div>
+                       </div>
+                    )}
+                  </div>
+
+                  <span className="text-sm font-medium text-slate-600 hidden md:block border-l pl-3 ml-1">{user.email}</span>
+
+                  {systemRole === 'Administrador' && (
+                    <Button variant="outline" size="sm" className="gap-2 border-primary text-primary hover:bg-primary/10" onClick={() => router.push('/admin/dashboard')}>
+                      <Shield className="h-4 w-4" /> Panel Admin
+                    </Button>
+                  )}
+
+                  {systemRole === 'Inmobiliaria' && (
+                    <Button variant="outline" size="sm" className="gap-2 border-emerald-500 text-emerald-600 hover:bg-emerald-50" onClick={() => router.push('/admin')}>
+                      <Building className="h-4 w-4" /> Publicar Inmuebles
+                    </Button>
+                  )}
+
                   <Button variant="ghost" size="sm" className="gap-2 text-rose-500 hover:text-rose-600 hover:bg-rose-50" onClick={() => {setShowFavoritesView(true); setShowCompareView(false);}}>
-                    <Heart className="h-4 w-4" fill={favoriteIds.length > 0 ? "currentColor" : "none"} /> Mis Favoritos
+                    <Heart className="h-4 w-4" fill={favoriteIds.length > 0 ? "currentColor" : "none"} /> Favoritos
                   </Button>
                   <Button variant="ghost" size="sm" className="gap-2" onClick={() => setShowProfileConfig(true)}>
                     <UserCircle className="h-4 w-4" /> Mi Perfil
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => {supabase.auth.signOut(); setUser(null);}} className="text-slate-600">
+                  <Button variant="outline" size="sm" onClick={() => {supabase.auth.signOut(); setUser(null); setSystemRole("Usuario");}} className="text-slate-600">
                     Salir
                   </Button>
                 </div>
@@ -259,7 +354,7 @@ export default function BuscadorPage() {
            <CompareProperties 
              property1={dbProperties.find(p => p.id === comparingIds[0])}
              property2={dbProperties.find(p => p.id === comparingIds[1])}
-             userProfile={currentProfile} // <-- Pasamos el perfil al comparador
+             userProfile={currentProfile}
              onClose={() => { setShowCompareView(false); setComparingIds([]); }}
            />
         ) : showFavoritesView ? (
@@ -274,7 +369,11 @@ export default function BuscadorPage() {
         ) : (
           <div className="flex flex-col lg:flex-row gap-8 animate-in fade-in duration-300">
             <aside className="w-full lg:w-[320px]">
-               <SearchFilters onSearch={setFilters} onClear={() => setFilters(null)} />
+               <SearchFilters 
+                 onSearch={setFilters} 
+                 onClear={() => setFilters(null)} 
+                 availableProperties={dbProperties} 
+               />
             </aside>
             <div className="flex-1 flex flex-col gap-8">
               <div className="h-[400px] rounded-xl border bg-white overflow-hidden p-2 relative z-0">

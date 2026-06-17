@@ -26,33 +26,57 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .csrf(csrf -> csrf.disable()) // Desactiva CSRF porque usamos JWT
+                .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(auth -> auth
-                        // 1. Deja que CUALQUIERA pueda ver el catálogo de inmuebles y el análisis de score
+                        // Accesos públicos al catálogo y mapa
                         .requestMatchers(HttpMethod.GET, "/api/inmuebles").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/inmuebles/*/analisis").permitAll()
 
-                        // 2. Cualquier otra petición (Favoritos, Perfil, Carga Masiva) requiere usuario logueado
+                        // Permitir el registro público
+                        .requestMatchers(HttpMethod.POST, "/api/usuarios/registro").permitAll()
+
+                        // Accesos Administrativos y Dashboards
+                        .requestMatchers(HttpMethod.GET, "/api/admin/usuarios").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/admin/usuarios/*/estado").permitAll()
+                        .requestMatchers(HttpMethod.PUT, "/api/admin/usuarios/*/rol").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/admin/dashboard/**").permitAll()
+
+                        .requestMatchers("/api/notificaciones", "/api/notificaciones/**").permitAll()
+
+                        // Liberar Perfiles
+                        .requestMatchers(HttpMethod.POST, "/api/usuarios/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/usuarios/**").permitAll()
+
+                        // Liberar Favoritos
+                        .requestMatchers("/api/favoritos", "/api/favoritos/**").permitAll()
+
+                        .requestMatchers(HttpMethod.GET, "/api/inmuebles/**").permitAll()
+
+                        // Liberar la sincronización de mapas
+                        .requestMatchers(HttpMethod.POST, "/api/geo/sync").permitAll()
+
+                        // Liberar el CRUD del portal de Inmuebles
+                        .requestMatchers("/api/admin/inmuebles", "/api/admin/inmuebles/**").permitAll()
+
+                        // El resto requiere usuario logueado
                         .anyRequest().authenticated()
                 )
-                // Agrega el filtro de Supabase/JWT antes del filtro oficial de Spring
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
 
-    // Le decimos a Spring Security que acepte peticiones desde el frontend en Next.js
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:3000")); // Origen permitido (Next.js)
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS")); // Métodos permitidos
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type")); // Cabeceras permitidas
+        configuration.setAllowedOrigins(List.of("http://localhost:3000"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration); // Aplica a todas las rutas de la API
+        source.registerCorsConfiguration("/**", configuration);
         return source;
     }
 }

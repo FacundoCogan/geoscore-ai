@@ -1,137 +1,141 @@
 "use client"
 
-import { useState } from "react"
-import { Search, MapPin, ChevronDown } from "lucide-react"
+import { useState, useEffect } from "react"
+import { MapPin } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Slider } from "@/components/ui/slider"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { cn } from "@/lib/utils"
 
 export interface SearchFiltersState {
-  direccion: string
+  ubicacion: string
+  tipoOperacion: "alquiler" | "venta"
+  ambientes: string
   precioMin: number
   precioMax: number
-  ambientes: number
-  tipoOperacion: string
 }
 
-const BARRIOS_CABA = ["Palermo", "Recoleta", "Belgrano", "Caballito", "Núñez", "Villa Urquiza", "Colegiales", "Villa Crespo", "Almagro", "San Telmo", "Puerto Madero", "Barracas", "La Boca", "Flores", "Villa Devoto", "CABA"]
+interface SearchFiltersProps {
+  onSearch: (filters: SearchFiltersState | null) => void
+  onClear: () => void
+  availableProperties?: any[] 
+}
 
-export function SearchFilters({ onSearch, onClear }: { onSearch: any, onClear: any }) {
-  const [direccion, setDireccion] = useState("")
-  const [precioRange, setPrecioRange] = useState([50000, 300000])
-  const [ambientes, setAmbientes] = useState<number>(0)
-  const [tipoOperacion, setTipoOperacion] = useState("alquiler")
-  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false)
-  const [locationError, setLocationError] = useState<string | null>(null)
+export function SearchFilters({ onSearch, onClear, availableProperties = [] }: SearchFiltersProps) {
+  const [ubicacion, setUbicacion] = useState("")
+  const [tipoOperacion, setTipoOperacion] = useState<"alquiler" | "venta">("alquiler")
+  const [ambientes, setAmbientes] = useState("Todos")
+  const [precioMax, setPrecioMax] = useState(1000000)
 
-  const handleSearch = () => {
-    if (direccion.trim() !== "") {
-      const searchLower = direccion.toLowerCase()
-      const isValidCABA = BARRIOS_CABA.some(b => searchLower.includes(b.toLowerCase()))
-      
-      if (!isValidCABA) {
-        setLocationError("La cobertura es exclusiva para CABA. Por favor ingresa una ubicación válida.")
-        return 
-      }
+  const [suggestions, setSuggestions] = useState<string[]>([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      onSearch({ ubicacion, tipoOperacion, ambientes, precioMin: 50000, precioMax })
+    }, 150) 
+    return () => clearTimeout(timeout)
+  }, [ubicacion, tipoOperacion, ambientes, precioMax, onSearch])
+
+  const handleUbicacionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value
+    setUbicacion(val)
+
+    if (val.trim().length < 2) {
+      setSuggestions([])
+      setShowSuggestions(false)
+      return
     }
 
-    setLocationError(null)
-    onSearch({ direccion, precioMin: precioRange[0], precioMax: precioRange[1], ambientes, tipoOperacion })
+    const matches = new Set<string>()
+    availableProperties.forEach(p => {
+      if (p.direccion && p.direccion.toLowerCase().includes(val.toLowerCase())) {
+        matches.add(`${p.direccion}, ${p.barrio}`)
+      }
+      if (p.barrio && p.barrio.toLowerCase().includes(val.toLowerCase())) {
+        matches.add(p.barrio)
+      }
+    })
+
+    setSuggestions(Array.from(matches).slice(0, 6)) 
+    setShowSuggestions(true)
   }
 
   const handleClear = () => {
-    setDireccion("")
-    setPrecioRange([50000, 300000])
-    setAmbientes(0)
-    setLocationError(null)
+    setUbicacion("")
+    setTipoOperacion("alquiler")
+    setAmbientes("Todos")
+    setPrecioMax(1000000)
     onClear()
   }
 
   return (
-    <div className="flex flex-col gap-6 p-6 bg-white rounded-xl border border-slate-200 shadow-sm">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-slate-800">Buscar Inmuebles</h2>
-        <button onClick={handleClear} className="text-sm font-medium text-slate-400 hover:text-slate-600 transition-colors">
-          Limpiar
-        </button>
+    <div className="bg-white rounded-2xl shadow-sm border p-6 sticky top-24">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="font-bold text-slate-900 text-lg flex items-center gap-2">Buscar Inmuebles</h2>
+        <button onClick={handleClear} className="text-xs font-semibold text-slate-400 hover:text-slate-600 transition-colors">Limpiar</button>
       </div>
 
-      <div className="flex gap-2 p-1 bg-slate-100 rounded-lg">
-        <Button variant={tipoOperacion === "alquiler" ? "default" : "ghost"} size="sm" onClick={() => setTipoOperacion("alquiler")} className={`flex-1 rounded-md ${tipoOperacion === 'alquiler' ? 'shadow-sm bg-primary text-white hover:bg-primary/90' : 'text-slate-600'}`}>Alquiler</Button>
-        <Button variant={tipoOperacion === "venta" ? "default" : "ghost"} size="sm" onClick={() => setTipoOperacion("venta")} className={`flex-1 rounded-md ${tipoOperacion === 'venta' ? 'shadow-sm bg-primary text-white hover:bg-primary/90' : 'text-slate-600'}`}>Venta</Button>
-      </div>
-
-      <div className="space-y-2">
-        <Label className="text-sm font-semibold text-slate-700">Barrio o Dirección</Label>
-        <div className="relative">
-          <MapPin className={`absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 ${locationError ? 'text-destructive' : 'text-slate-400'}`} />
-          <Input 
-            placeholder="Ej: Palermo, CABA..." 
-            value={direccion} 
-            onChange={(e) => {
-              setDireccion(e.target.value)
-              if (locationError) setLocationError(null)
-            }} 
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                handleSearch()
-              }
-            }}
-            className={cn(
-              "pl-9 bg-white transition-colors",
-              locationError ? "border-destructive focus-visible:ring-destructive" : "border-slate-200"
-            )} 
-          />
+      <div className="space-y-6">
+        
+        <div className="flex p-1 bg-slate-100 rounded-xl">
+          <button className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${tipoOperacion === 'alquiler' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`} onClick={() => setTipoOperacion("alquiler")}>Alquiler</button>
+          <button className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${tipoOperacion === 'venta' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`} onClick={() => setTipoOperacion("venta")}>Venta</button>
         </div>
-        {locationError && (
-          <p className="text-xs text-destructive font-medium mt-1">{locationError}</p>
-        )}
-      </div>
 
-      <div className="space-y-2">
-        <Label className="text-sm font-semibold text-slate-700">Ambientes</Label>
-        <div className="flex gap-2">
-          {[0, 1, 2, 3, 4].map((num) => (
-            <Button key={num} variant={ambientes === num ? "default" : "outline"} size="sm" onClick={() => setAmbientes(num)} className={`flex-1 border-slate-200 ${ambientes === num ? 'bg-primary text-primary-foreground' : 'text-slate-600'}`}>
-              {num === 0 ? "Todos" : num === 4 ? "4+" : num}
-            </Button>
-          ))}
-        </div>
-      </div>
-
-      <div className="space-y-4 pt-2">
-        <Label className="text-sm font-semibold text-slate-700">Precio mensual</Label>
-        <div className="px-2 mt-4 mb-2">
-           <Slider 
-              value={precioRange} 
-              max={1000000} 
-              step={10000} 
-              onValueChange={setPrecioRange} 
+        <div className="space-y-2 relative">
+          <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Barrio o Dirección</label>
+          <div className="relative">
+            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input 
+              placeholder="Ej: Av Caseros 3039..." 
+              className="pl-9 h-11 bg-slate-50 border-slate-200"
+              value={ubicacion}
+              onChange={handleUbicacionChange}
+              onFocus={() => { if(suggestions.length > 0) setShowSuggestions(true) }}
             />
+          </div>
+          
+          {showSuggestions && suggestions.length > 0 && (
+            <>
+              <div className="fixed inset-0 z-[9998]" onClick={() => setShowSuggestions(false)}></div>
+              <ul className="absolute z-[9999] w-full bg-white border border-slate-200 rounded-xl shadow-xl mt-1 max-h-64 overflow-y-auto left-0 top-full">
+                {suggestions.map((s, i) => (
+                  <li key={i} className="px-4 py-3 hover:bg-slate-50 cursor-pointer text-sm border-b border-slate-100 last:border-0 flex items-start gap-2 transition-colors"
+                      onClick={() => {
+                        setUbicacion(s);
+                        setShowSuggestions(false);
+                      }}>
+                    <MapPin className="h-4 w-4 shrink-0 text-blue-500 mt-0.5" />
+                    <span className="text-slate-700 font-medium">{s}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </div>
-        <div className="flex justify-between items-center text-sm font-medium">
-          <span className="text-slate-500">${precioRange[0].toLocaleString()}</span>
-          <span className="text-slate-700">${precioRange[1].toLocaleString()}</span>
+
+        <div className="space-y-2">
+          <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Ambientes</label>
+          <div className="flex gap-2">
+            {['Todos', '1', '2', '3', '4+'].map((amb) => (
+              <button key={amb} onClick={() => setAmbientes(amb)} className={`flex-1 py-2 text-sm font-semibold rounded-lg border transition-all ${ambientes === amb ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>
+                {amb}
+              </button>
+            ))}
+          </div>
         </div>
+
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Precio máximo</label>
+            <span className="text-sm font-bold text-primary">US$ {precioMax.toLocaleString('es-AR')}</span>
+          </div>
+          <input type="range" min="5000" max="2000000" step="5000" value={precioMax} onChange={(e) => setPrecioMax(Number(e.target.value))} className="w-full accent-blue-600" />
+        </div>
+
+        <Button onClick={() => setShowSuggestions(false)} className="w-full h-12 text-base font-bold bg-blue-600 hover:bg-blue-700">
+          Explorar Mapa
+        </Button>
       </div>
-
-      <Collapsible open={isAdvancedOpen} onOpenChange={setIsAdvancedOpen} className="border-t border-slate-100 pt-4">
-        <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 w-full">
-          <Search className="h-4 w-4" /> Filtros avanzados
-          <ChevronDown className={`h-4 w-4 ml-auto transition-transform ${isAdvancedOpen ? 'rotate-180' : ''}`} />
-        </CollapsibleTrigger>
-        <CollapsibleContent className="pt-4">
-           <p className="text-xs text-slate-400">Más opciones próximamente...</p>
-        </CollapsibleContent>
-      </Collapsible>
-
-      <Button onClick={handleSearch} className="w-full h-11 text-base font-semibold shadow-md" size="lg">
-        Buscar inmuebles
-      </Button>
     </div>
   )
 }
