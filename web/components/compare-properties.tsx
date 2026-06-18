@@ -23,11 +23,11 @@ export function CompareProperties({ property1, property2, userProfile, onClose }
       try {
         const urlParams = userProfile ? `?perfil=${userProfile}` : '';
         
-        const res1 = await fetch(`http://localhost:8080/api/inmuebles/${property1.id}/analisis${urlParams}`)
+        const res1 = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/inmuebles/${property1.id}/analisis${urlParams}`)
         setData1(await res1.json())
 
         if (property2) {
-          const res2 = await fetch(`http://localhost:8080/api/inmuebles/${property2.id}/analisis${urlParams}`)
+          const res2 = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/inmuebles/${property2.id}/analisis${urlParams}`)
           setData2(await res2.json())
         }
       } catch (e) {

@@ -61,7 +61,7 @@ export default function GestionInmueblesPage() {
         }
 
         setUserId(session.user.id)
-        const res = await fetch(`http://localhost:8080/api/admin/usuarios?t=${Date.now()}`, { cache: 'no-store' })
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/usuarios?t=${Date.now()}`, { cache: 'no-store' })
         if (res.ok) {
           const users = await res.json()
           const me = users.find((u: any) => u.email === session.user.email)
@@ -92,7 +92,7 @@ export default function GestionInmueblesPage() {
   const fetchMisInmuebles = async (propietarioId: string) => {
     setIsLoadingInmuebles(true)
     try {
-      const res = await fetch(`http://localhost:8080/api/admin/inmuebles/propietario/${propietarioId}?t=${Date.now()}`, { cache: 'no-store' })
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/inmuebles/propietario/${propietarioId}?t=${Date.now()}`, { cache: 'no-store' })
       if (res.ok) setInmuebles(await res.json())
     } catch (e) {} finally { setIsLoadingInmuebles(false) }
   }
@@ -100,7 +100,7 @@ export default function GestionInmueblesPage() {
   const fetchInmueblesAdmin = async () => {
     setIsLoadingInmuebles(true)
     try {
-      const res = await fetch(`http://localhost:8080/api/admin/inmuebles/todos?t=${Date.now()}`, { cache: 'no-store' })
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/inmuebles/todos?t=${Date.now()}`, { cache: 'no-store' })
       if (res.ok) setInmuebles(await res.json())
     } catch (e) {} finally { setIsLoadingInmuebles(false) }
   }
@@ -164,7 +164,7 @@ export default function GestionInmueblesPage() {
     setIsSaving(true)
     try {
       const payload = { ...formData, propietarioId: userId, rol: systemRole }
-      const res = await fetch('http://localhost:8080/api/admin/inmuebles', {
+      const res = await fetch('${process.env.NEXT_PUBLIC_API_URL}/api/admin/inmuebles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -211,7 +211,7 @@ export default function GestionInmueblesPage() {
   const handleDelete = async (inmuebleId: number) => {
     if (!confirm("¿Estás seguro de que querés eliminar permanentemente este inmueble? Esta acción no se puede deshacer.")) return
     try {
-      const res = await fetch(`http://localhost:8080/api/admin/inmuebles/${inmuebleId}?rol=${systemRole}&userId=${userId}`, { method: 'DELETE', cache: 'no-store' })
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/inmuebles/${inmuebleId}?rol=${systemRole}&userId=${userId}`, { method: 'DELETE', cache: 'no-store' })
       if (res.ok) {
         showToast("Operación exitosa", "El inmueble ha sido eliminado de la plataforma.", "success")
         systemRole === 'Administrador' ? fetchInmueblesAdmin() : fetchMisInmuebles(userId)
@@ -222,7 +222,7 @@ export default function GestionInmueblesPage() {
 
   const handleAprobar = async (id: number) => {
     try {
-      const res = await fetch(`http://localhost:8080/api/admin/inmuebles/${id}/aprobar`, { method: 'PUT', cache: 'no-store' })
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/inmuebles/${id}/aprobar`, { method: 'PUT', cache: 'no-store' })
       if (res.ok) {
           fetchInmueblesAdmin();
           setPreviewInmueble(null);
@@ -239,7 +239,7 @@ export default function GestionInmueblesPage() {
   const handleConfirmRechazo = async () => {
     if (!rejectingInmueble || !motivoRechazo.trim()) return;
     try {
-      const res = await fetch(`http://localhost:8080/api/admin/inmuebles/${rejectingInmueble.id}/rechazar`, { 
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/inmuebles/${rejectingInmueble.id}/rechazar`, { 
           method: 'PUT', 
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ motivo: motivoRechazo }),

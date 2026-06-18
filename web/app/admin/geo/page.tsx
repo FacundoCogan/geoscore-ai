@@ -29,7 +29,7 @@ export default function GeoDataPage() {
           return
         }
 
-        const res = await fetch(`http://localhost:8080/api/admin/usuarios?t=${Date.now()}`, { cache: 'no-store' })
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/usuarios?t=${Date.now()}`, { cache: 'no-store' })
         if (res.ok) {
           const users = await res.json()
           const me = users.find((u: any) => u.email === session.user.email)
@@ -57,7 +57,7 @@ export default function GeoDataPage() {
     setLogs([{ hora: new Date().toLocaleTimeString(), tipo: "INFO", mensaje: "> conectando psql -h localhost -U admin -d geodb" }])
     
     try {
-      const res = await fetch('http://localhost:8080/api/geo/sync', { method: 'POST' })
+      const res = await fetch('${process.env.NEXT_PUBLIC_API_URL}/api/geo/sync', { method: 'POST' })
       if (res.ok) {
         const data = await res.json()
         setLogs(data)

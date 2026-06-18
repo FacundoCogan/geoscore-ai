@@ -49,7 +49,7 @@ export default function GestionUsuariosPage() {
         }
 
         setAdminEmail(session.user.email)
-        const res = await fetch(`http://localhost:8080/api/admin/usuarios?t=${Date.now()}`, { cache: 'no-store' })
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/usuarios?t=${Date.now()}`, { cache: 'no-store' })
         
         if (res.ok) {
           const data = await res.json()
@@ -78,7 +78,7 @@ export default function GestionUsuariosPage() {
 
   const fetchUsuarios = async () => {
     try {
-      const res = await fetch(`http://localhost:8080/api/admin/usuarios?t=${Date.now()}`, { cache: 'no-store' })
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/usuarios?t=${Date.now()}`, { cache: 'no-store' })
       if (res.ok) {
         const data = await res.json()
         setUsuarios(data)
@@ -122,7 +122,7 @@ export default function GestionUsuariosPage() {
     setIsLoading(true)
 
     try {
-      const res = await fetch(`http://localhost:8080/api/admin/usuarios/${selectedUser.id}/estado`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/usuarios/${selectedUser.id}/estado`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ adminEmail, estado: nuevoEstado })
@@ -158,7 +158,7 @@ export default function GestionUsuariosPage() {
     setIsChangingRole(true);
 
     try {
-      const res = await fetch(`http://localhost:8080/api/admin/usuarios/${selectedUser.id}/rol`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/usuarios/${selectedUser.id}/rol`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rol: newRole })

@@ -32,7 +32,7 @@ export default function DashboardPage() {
           return
         }
 
-        const resUsers = await fetch(`http://localhost:8080/api/admin/usuarios?t=${Date.now()}`, { cache: 'no-store' })
+        const resUsers = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/usuarios?t=${Date.now()}`, { cache: 'no-store' })
         if (resUsers.ok) {
           const users = await resUsers.json()
           const me = users.find((u: any) => u.email === session.user.email)

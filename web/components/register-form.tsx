@@ -146,7 +146,7 @@ export function RegisterForm({
 
       if (!authData.user) throw new Error("Error desconocido al crear la cuenta.")
 
-      const res = await fetch("http://localhost:8080/api/usuarios/registro", {
+      const res = await fetch("${process.env.NEXT_PUBLIC_API_URL}/api/usuarios/registro", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
