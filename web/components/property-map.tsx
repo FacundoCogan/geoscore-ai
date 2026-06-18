@@ -13,7 +13,7 @@ const Popup = dynamic(() => import("react-leaflet").then((mod) => mod.Popup), { 
 import "leaflet/dist/leaflet.css"
 
 interface PropertyMapProps {
-  properties: Property[];
+  properties: (Property & { lat?: number; lng?: number })[];
   selectedProperty: string | null;
   onPropertySelect: (id: string) => void;
   nearbyPois?: any[]; 
