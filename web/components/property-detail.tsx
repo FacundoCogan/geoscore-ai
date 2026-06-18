@@ -33,7 +33,7 @@ export function PropertyDetailView({ property, userProfile, onClose }: any) {
                    <Button variant="secondary" size="icon" className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full h-8 w-8 opacity-70 hover:opacity-100" onClick={() => setImgIndex(imgIndex === 0 ? images.length - 1 : imgIndex - 1)}><ChevronLeft className="h-5 w-5"/></Button>
                    <Button variant="secondary" size="icon" className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full h-8 w-8 opacity-70 hover:opacity-100" onClick={() => setImgIndex(imgIndex === images.length - 1 ? 0 : imgIndex + 1)}><ChevronRight className="h-5 w-5"/></Button>
                    <div className="absolute bottom-4 flex gap-1.5 bg-black/40 px-3 py-1.5 rounded-full">
-                     {images.map((_, i) => <div key={i} className={`h-1.5 w-1.5 rounded-full ${i === imgIndex ? 'bg-white' : 'bg-white/40'}`}/>)}
+                     {images.map((_: any, i: number) => <div key={i} className={`h-1.5 w-1.5 rounded-full ${i === imgIndex ? 'bg-white' : 'bg-white/40'}`}/>)}
                    </div>
                  </>
                )}
