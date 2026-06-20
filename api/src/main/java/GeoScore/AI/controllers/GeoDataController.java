@@ -56,11 +56,11 @@ public class GeoDataController {
                 insertarPoiMock("Sanatorio Güemes", "Salud", -34.5932, -58.4168);
 
                 logs.add(Map.of("hora", LocalDateTime.now().format(formatter), "tipo", "OK", "mensaje", "Se insertaron nuevos registros espaciales (PostGIS)."));
+                logs.add(Map.of("hora", LocalDateTime.now().format(formatter), "tipo", "OK", "mensaje", "Sincronización completada exitosamente. Calculando índices espaciales GIST..."));
             } else {
                 logs.add(Map.of("hora", LocalDateTime.now().format(formatter), "tipo", "WARN", "mensaje", "La base de datos ya contiene POIs. Sincronización omitida para evitar duplicados."));
             }
 
-            logs.add(Map.of("hora", LocalDateTime.now().format(formatter), "tipo", "OK", "mensaje", "Sincronización completada exitosamente. Calculando índices espaciales GIST..."));
 
             return ResponseEntity.ok(logs);
 

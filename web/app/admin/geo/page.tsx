@@ -54,7 +54,7 @@ export default function GeoDataPage() {
 
   const handleSync = async () => {
     setIsSyncing(true)
-    setLogs([{ hora: new Date().toLocaleTimeString(), tipo: "INFO", mensaje: "> conectando psql -h localhost -U admin -d geodb" }])
+    setLogs([{ hora: new Date().toLocaleTimeString(), tipo: "INFO", mensaje: "Iniciando proceso de sincronización con base de datos..." }])
     
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/geo/sync`, { method: 'POST' })
