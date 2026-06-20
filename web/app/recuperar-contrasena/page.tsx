@@ -103,9 +103,6 @@ export default function RecuperarContrasenaPage() {
                 Enviamos un enlace de recuperación a <strong>{email}</strong>. 
                 Hacé clic en el enlace del correo para continuar.
               </p>
-              <p className="text-xs text-muted-foreground mt-4">
-                (Si estás probando y no te llega el mail, podés buscar el enlace de recuperación directamente en el dashboard de Supabase).
-              </p>
             </div>
           )}
 
