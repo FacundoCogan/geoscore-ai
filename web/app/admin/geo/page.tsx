@@ -57,7 +57,7 @@ export default function GeoDataPage() {
     setLogs([{ hora: new Date().toLocaleTimeString(), tipo: "INFO", mensaje: "> conectando psql -h localhost -U admin -d geodb" }])
     
     try {
-      const res = await fetch('${process.env.NEXT_PUBLIC_API_URL}/api/geo/sync', { method: 'POST' })
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/geo/sync`, { method: 'POST' })
       if (res.ok) {
         const data = await res.json()
         setLogs(data)

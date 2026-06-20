@@ -5,6 +5,7 @@ import GeoScore.AI.repositories.PoiRepository;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.PrecisionModel;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,6 +22,12 @@ public class GeoDataController {
     private final PoiRepository poiRepository;
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
 
+    @Value("${spring.datasource.url:localhost}")
+    private String dbUrl;
+
+    @Value("${spring.datasource.username:admin}")
+    private String dbUser;
+
     public GeoDataController(PoiRepository poiRepository) {
         this.poiRepository = poiRepository;
     }
@@ -30,7 +37,11 @@ public class GeoDataController {
         List<Map<String, String>> logs = new ArrayList<>();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm:ss");
 
-        logs.add(Map.of("hora", LocalDateTime.now().format(formatter), "tipo", "INFO", "mensaje", "> conectando psql -h localhost -U admin -d geodb"));
+        // Extraemos el host de Supabase de la URL para armar un log realista
+        String host = dbUrl.contains("://") ? dbUrl.substring(dbUrl.indexOf("://") + 3, dbUrl.lastIndexOf(":")) : dbUrl;
+        String logMensaje = String.format("> conectando psql -h %s -U %s -d geodb", host, dbUser);
+
+        logs.add(Map.of("hora", LocalDateTime.now().format(formatter), "tipo", "INFO", "mensaje", logMensaje));
         logs.add(Map.of("hora", LocalDateTime.now().format(formatter), "tipo", "INFO", "mensaje", "Estableciendo túnel seguro con API Rest de BA Data..."));
 
         try {
@@ -54,6 +65,8 @@ public class GeoDataController {
             return ResponseEntity.ok(logs);
 
         } catch (Exception e) {
+            e.printStackTrace();
+
             logs.add(Map.of("hora", LocalDateTime.now().format(formatter), "tipo", "ERROR", "mensaje", "Fallo crítico en la inserción: " + e.getMessage()));
             return ResponseEntity.status(500).body(logs);
         }
