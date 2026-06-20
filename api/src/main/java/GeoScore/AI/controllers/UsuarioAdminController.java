@@ -12,7 +12,7 @@ import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/admin/usuarios")
-@CrossOrigin(origins = "http://localhost:3000")
+
 public class UsuarioAdminController {
 
     private final UsuarioRepository usuarioRepository;

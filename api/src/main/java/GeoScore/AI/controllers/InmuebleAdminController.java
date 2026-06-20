@@ -24,7 +24,6 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/admin/inmuebles")
-@CrossOrigin(origins = "http://localhost:3000")
 public class InmuebleAdminController {
 
     private final InmuebleRepository inmuebleRepository;

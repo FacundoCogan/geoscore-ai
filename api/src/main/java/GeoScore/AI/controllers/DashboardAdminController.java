@@ -19,7 +19,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin/dashboard")
-@CrossOrigin(origins = "http://localhost:3000")
+
 public class DashboardAdminController {
 
     private final InmuebleRepository inmuebleRepository;

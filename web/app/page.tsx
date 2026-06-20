@@ -43,8 +43,11 @@ export default function BuscadorPage() {
   useEffect(() => {
     const fetchInmuebles = async () => {
       try {
-        const url = currentProfile ? `http://localhost:8080/api/inmuebles?perfil=${currentProfile}&t=${Date.now()}` : `http://localhost:8080/api/inmuebles?t=${Date.now()}`;
-        const res = await fetch(url, { cache: 'no-store' })
+        const url = currentProfile ? `${process.env.NEXT_PUBLIC_API_URL}/api/inmuebles?perfil=${currentProfile}&t=${Date.now()}` : `${process.env.NEXT_PUBLIC_API_URL}/api/inmuebles?t=${Date.now()}`;
+        const res = await fetch(url, { 
+          cache: 'no-store',
+          headers: { 'ngrok-skip-browser-warning': 'true' }
+        })
         if (res.ok) {
           const data = await res.json()
           setDbProperties(data) 
@@ -58,13 +61,18 @@ export default function BuscadorPage() {
 
   useEffect(() => {
     if (!selectedProperty) { setNearbyPois([]); return; }
-    const url = `http://localhost:8080/api/inmuebles/${selectedProperty}/analisis${currentProfile ? `?perfil=${currentProfile}` : ''}`
-    fetch(url).then(res => res.json()).then(data => setNearbyPois(data.poisReales || [])).catch(err => console.error(err))
+    const url = `${process.env.NEXT_PUBLIC_API_URL}/api/inmuebles/${selectedProperty}/analisis${currentProfile ? `?perfil=${currentProfile}` : ''}`
+    fetch(url, { headers: { 'ngrok-skip-browser-warning': 'true' } })
+      .then(res => res.json())
+      .then(data => setNearbyPois(data.poisReales || []))
+      .catch(err => console.error(err))
   }, [selectedProperty, currentProfile])
 
   const fetchUserProfile = async (userId: string) => {
     try {
-      const res = await fetch(`http://localhost:8080/api/usuarios/${userId}/perfil`)
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/usuarios/${userId}/perfil`, {
+        headers: { 'ngrok-skip-browser-warning': 'true' }
+      })
       if (res.status === 200) setCurrentProfile(await res.text() as LifestyleProfile)
       else setCurrentProfile(null) 
     } catch (e) { setCurrentProfile(null) }
@@ -72,21 +80,29 @@ export default function BuscadorPage() {
 
   const fetchFavorites = async (userId: string) => {
     try {
-      const res = await fetch(`http://localhost:8080/api/favoritos/${userId}`)
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/favoritos/${userId}`, {
+        headers: { 'ngrok-skip-browser-warning': 'true' }
+      })
       if (res.ok) setFavoriteIds(await res.json())
     } catch (e) {}
   }
 
   const fetchNotis = async (email: string) => {
     try {
-      const res = await fetch(`http://localhost:8080/api/notificaciones/${email}?t=${Date.now()}`, { cache: 'no-store' })
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/notificaciones/${email}?t=${Date.now()}`, { 
+        cache: 'no-store',
+        headers: { 'ngrok-skip-browser-warning': 'true' }
+      })
       if (res.ok) setNotifications(await res.json())
     } catch (e) {}
   }
 
   const handleReadNoti = async (id: number) => {
     try {
-      await fetch(`http://localhost:8080/api/notificaciones/${id}/leer`, { method: 'PUT' })
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/notificaciones/${id}/leer`, { 
+        method: 'PUT',
+        headers: { 'ngrok-skip-browser-warning': 'true' }
+      })
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, leida: true } : n))
       router.push('/admin')
     } catch (e) {}
@@ -95,7 +111,10 @@ export default function BuscadorPage() {
   const handleDeleteNoti = async (e: React.MouseEvent, id: number) => {
     e.stopPropagation();
     try {
-      await fetch(`http://localhost:8080/api/notificaciones/${id}`, { method: 'DELETE' })
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/notificaciones/${id}`, { 
+        method: 'DELETE',
+        headers: { 'ngrok-skip-browser-warning': 'true' }
+      })
       setNotifications(prev => prev.filter(n => n.id !== id))
     } catch (err) {}
   }
@@ -107,7 +126,9 @@ export default function BuscadorPage() {
         if (session?.user) {
           setUser(session.user)
           try {
-            const resUsuarios = await fetch('http://localhost:8080/api/admin/usuarios')
+            const resUsuarios = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/usuarios`, {
+              headers: { 'ngrok-skip-browser-warning': 'true' }
+            })
             if (resUsuarios.ok) {
               const users = await resUsuarios.json()
               const me = users.find((u: any) => u.email === session.user.email)
@@ -153,9 +174,12 @@ export default function BuscadorPage() {
     setFavoriteIds(prev => isAdding ? [...prev, propertyId] : prev.filter(id => id !== propertyId));
     
     try {
-      const res = await fetch('http://localhost:8080/api/favoritos/toggle', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/favoritos/toggle`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
+        },
         body: JSON.stringify({ userId: user.id, inmuebleId: propertyId })
       })
 
@@ -236,9 +260,12 @@ export default function BuscadorPage() {
             onCancel={() => setShowProfileConfig(false)}
             onSave={async (profile) => {
               try {
-                const res = await fetch('http://localhost:8080/api/usuarios/perfil', {
+                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/usuarios/perfil`, {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
+                  headers: { 
+                    'Content-Type': 'application/json',
+                    'ngrok-skip-browser-warning': 'true'
+                  },
                   body: JSON.stringify({ userId: user.id, profile })
                 })
                 
@@ -295,7 +322,6 @@ export default function BuscadorPage() {
                                         {n.mensaje}
                                         <div className="text-[10px] text-slate-400 mt-1">{new Date(n.fecha).toLocaleDateString()}</div>
                                       </div>
-                                      {/* Tacho de basura siempre visible */}
                                       <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-red-500 hover:bg-red-50 shrink-0" onClick={(e) => handleDeleteNoti(e, n.id)}>
                                         <Trash2 className="h-4 w-4" />
                                       </Button>

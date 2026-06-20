@@ -16,7 +16,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/geo")
-@CrossOrigin(origins = "http://localhost:3000")
 public class GeoDataController {
 
     private final PoiRepository poiRepository;

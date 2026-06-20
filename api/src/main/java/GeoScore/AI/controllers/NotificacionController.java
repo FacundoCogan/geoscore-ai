@@ -11,7 +11,7 @@ import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/notificaciones")
-@CrossOrigin(origins = "http://localhost:3000")
+
 public class NotificacionController {
 
     private final NotificacionRepository notificacionRepository;

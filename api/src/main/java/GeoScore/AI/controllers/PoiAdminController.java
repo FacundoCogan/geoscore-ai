@@ -9,7 +9,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin/geo")
-@CrossOrigin(origins = "http://localhost:3000")
+
 public class PoiAdminController {
 
     private final PoiSyncService poiSyncService;
