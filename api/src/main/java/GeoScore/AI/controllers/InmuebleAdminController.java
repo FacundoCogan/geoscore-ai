@@ -1,5 +1,10 @@
 package GeoScore.AI.controllers;
 
+import org.springframework.web.multipart.MultipartFile;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import GeoScore.AI.entities.InmuebleEntity;
 import GeoScore.AI.entities.UsuarioEntity;
 import GeoScore.AI.entities.NotificacionEntity;
@@ -139,6 +144,68 @@ public class InmuebleAdminController {
             return ResponseEntity.ok(Map.of("mensaje", "Guardado exitosamente."));
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Map.of("error", "Error interno: " + e.getMessage()));
+        }
+    }
+
+    // EL MOTOR DE CACHÉ: Limpiamos por las dudas
+    @Caching(evict = {
+            @CacheEvict(value = "catalogoInmuebles", allEntries = true),
+            @CacheEvict(value = "analisisInmuebles", allEntries = true)
+    })
+    @PostMapping("/upload")
+    public ResponseEntity<?> uploadCSV(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "rol", defaultValue = "Inmobiliaria") String rol) {
+
+        if (file.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "El archivo está vacío."));
+        }
+
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
+            String line;
+            boolean isFirstLine = true;
+            List<InmuebleEntity> inmueblesNuevos = new ArrayList<>();
+
+            // REGLA DE NEGOCIO: El Admin publica directo, el Inmobiliario va a moderación
+            String estadoInicial = "Administrador".equalsIgnoreCase(rol) ? "Aprobado" : "Pendiente";
+
+            while ((line = br.readLine()) != null) {
+                if (isFirstLine) { isFirstLine = false; continue; }
+
+                String[] columnas = line.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)");
+                if (columnas.length < 9) continue;
+
+                InmuebleEntity inmueble = new InmuebleEntity();
+                inmueble.setTitulo(columnas[0].replaceAll("^\"|\"$", ""));
+                inmueble.setDescripcion(columnas[1].replaceAll("^\"|\"$", ""));
+                inmueble.setTipoOperacion(columnas[2].replaceAll("^\"|\"$", ""));
+                inmueble.setPrecio(Double.parseDouble(columnas[3].trim()));
+                inmueble.setAmbientes(Integer.parseInt(columnas[4].trim()));
+                inmueble.setDireccion(columnas[5].replaceAll("^\"|\"$", ""));
+                inmueble.setBarrio(columnas[6].replaceAll("^\"|\"$", ""));
+
+                double lat = Double.parseDouble(columnas[7].trim());
+                double lng = Double.parseDouble(columnas[8].trim());
+                inmueble.setUbicacion(geometryFactory.createPoint(new Coordinate(lng, lat)));
+
+                // Asignamos el estado dinámico
+                inmueble.setEstadoAprobacion(estadoInicial);
+
+                inmueblesNuevos.add(inmueble);
+            }
+
+            inmuebleRepository.saveAll(inmueblesNuevos);
+
+            // Mensaje de éxito dinámico para el frontend
+            String msjRespuesta = "Administrador".equalsIgnoreCase(rol)
+                    ? "[OK] " + inmueblesNuevos.size() + " inmuebles publicados directo en el catálogo."
+                    : "[OK] " + inmueblesNuevos.size() + " inmuebles procesados y encolados para moderación.";
+
+            return ResponseEntity.ok(Map.of("mensaje", msjRespuesta));
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).body(Map.of("error", "Error interno procesando el CSV: " + e.getMessage()));
         }
     }
 

@@ -164,7 +164,7 @@ export default function GestionInmueblesPage() {
     setIsSaving(true)
     try {
       const payload = { ...formData, propietarioId: userId, rol: systemRole }
-      const res = await fetch('${process.env.NEXT_PUBLIC_API_URL}/api/admin/inmuebles', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/inmuebles`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -253,16 +253,47 @@ export default function GestionInmueblesPage() {
     } catch (e) { showToast("Error", "No se pudo procesar el rechazo.", "error") }
   }
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+
     setIsUploading(true)
     setLogs(prev => [...prev, `> Iniciando carga del archivo: ${file.name}...`])
-    setTimeout(() => setLogs(prev => [...prev, `> Validando columnas y formatos en ${file.name}...`]), 800)
-    setTimeout(() => {
-      setLogs(prev => [...prev, `[OK] Archivo procesado correctamente. Sincronizando con PostgreSQL.`])
+
+    // Armamos el paquete con el archivo y el rol para mandarlo al backend
+    const formData = new FormData()
+    formData.append("file", file)
+    formData.append("rol", systemRole)
+
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/inmuebles/upload`, {
+        method: 'POST',
+        body: formData,
+        cache: 'no-store'
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        setLogs(prev => [...prev, data.mensaje || `[OK] Archivo procesado correctamente.`])
+        
+        // Refrescamos los datos para que aparezcan enseguida
+        if (systemRole === 'Administrador') {
+          fetchInmueblesAdmin()
+        } else {
+          fetchMisInmuebles(userId)
+        }
+      } else {
+        const err = await res.json()
+        setLogs(prev => [...prev, `[ERROR] ${err.error || "Fallo en la sincronización"}`])
+        showToast("Error en carga masiva", err.error || "Fallo al procesar el archivo.", "error")
+      }
+    } catch (error) {
+      setLogs(prev => [...prev, `[ERROR] No se pudo conectar con el servidor.`])
+      showToast("Error de red", "Verificá que el backend esté corriendo.", "error")
+    } finally {
       setIsUploading(false)
-    }, 2000)
+      if (fileInputRef.current) fileInputRef.current.value = "" // Resetea el input
+    }
   }
 
   const handleTabChange = (tab: "mis_publicaciones" | "manual" | "masiva" | "moderacion") => {
