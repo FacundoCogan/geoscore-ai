@@ -264,6 +264,7 @@ export default function GestionInmueblesPage() {
     const formData = new FormData()
     formData.append("file", file)
     formData.append("rol", systemRole)
+    formData.append("userId", userId)
 
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/inmuebles/upload`, {

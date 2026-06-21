@@ -5,6 +5,7 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import GeoScore.AI.entities.InmuebleEntity;
 import GeoScore.AI.entities.UsuarioEntity;
 import GeoScore.AI.entities.NotificacionEntity;
@@ -41,6 +42,18 @@ public class InmuebleAdminController {
         this.inmuebleRepository = inmuebleRepository;
         this.usuarioRepository = usuarioRepository;
         this.notificacionRepository = notificacionRepository;
+    }
+
+    // Busca a todos los administradores y les manda una alerta
+    private void notificarAdministradores(String mensaje) {
+        usuarioRepository.findAll().stream()
+                .filter(u -> "Administrador".equalsIgnoreCase(u.getRol()))
+                .forEach(admin -> {
+                    NotificacionEntity noti = new NotificacionEntity();
+                    noti.setUsuarioEmail(admin.getEmail());
+                    noti.setMensaje(mensaje);
+                    notificacionRepository.save(noti);
+                });
     }
 
     private Map<String, Object> mapToDTO(InmuebleEntity i) {
@@ -90,7 +103,6 @@ public class InmuebleAdminController {
         return ResponseEntity.ok(mis);
     }
 
-    // EL MOTOR DE CACHÉ: Cada vez que un agente guarda o modifica, destruimos la caché obsoleta de Redis
     @Caching(evict = {
             @CacheEvict(value = "catalogoInmuebles", allEntries = true),
             @CacheEvict(value = "analisisInmuebles", allEntries = true)
@@ -133,11 +145,9 @@ public class InmuebleAdminController {
             } else {
                 inmueble.setEstadoAprobacion(isEdit ? "Pausado" : "Pendiente");
 
+                // ALERTAMOS A TODOS LOS ADMINS DINÁMICAMENTE
                 String accionTexto = isEdit ? "modificó" : "creó";
-                NotificacionEntity noti = new NotificacionEntity();
-                noti.setUsuarioEmail("facundo_06@live.com.ar");
-                noti.setMensaje("🔔 Revisión pendiente: El agente " + accionTexto + " la publicación '" + inmueble.getTitulo() + "'.");
-                notificacionRepository.save(noti);
+                notificarAdministradores("🔔 Revisión pendiente: El agente " + accionTexto + " la publicación '" + inmueble.getTitulo() + "'.");
             }
 
             inmuebleRepository.save(inmueble);
@@ -147,7 +157,6 @@ public class InmuebleAdminController {
         }
     }
 
-    // EL MOTOR DE CACHÉ: Limpiamos por las dudas
     @Caching(evict = {
             @CacheEvict(value = "catalogoInmuebles", allEntries = true),
             @CacheEvict(value = "analisisInmuebles", allEntries = true)
@@ -155,7 +164,8 @@ public class InmuebleAdminController {
     @PostMapping("/upload")
     public ResponseEntity<?> uploadCSV(
             @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "rol", defaultValue = "Inmobiliaria") String rol) {
+            @RequestParam(value = "rol", defaultValue = "Inmobiliaria") String rol,
+            @RequestParam(value = "userId", required = false) String userId) {
 
         if (file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "El archivo está vacío."));
@@ -166,7 +176,6 @@ public class InmuebleAdminController {
             boolean isFirstLine = true;
             List<InmuebleEntity> inmueblesNuevos = new ArrayList<>();
 
-            // REGLA DE NEGOCIO: El Admin publica directo, el Inmobiliario va a moderación
             String estadoInicial = "Administrador".equalsIgnoreCase(rol) ? "Aprobado" : "Pendiente";
 
             while ((line = br.readLine()) != null) {
@@ -184,19 +193,36 @@ public class InmuebleAdminController {
                 inmueble.setDireccion(columnas[5].replaceAll("^\"|\"$", ""));
                 inmueble.setBarrio(columnas[6].replaceAll("^\"|\"$", ""));
 
+                if (userId != null && !userId.isEmpty()) {
+                    inmueble.setPropietarioId(userId);
+                }
+
+                inmueble.setEstadoAprobacion(estadoInicial);
+                inmueblesNuevos.add(inmueble);
+
                 double lat = Double.parseDouble(columnas[7].trim());
                 double lng = Double.parseDouble(columnas[8].trim());
                 inmueble.setUbicacion(geometryFactory.createPoint(new Coordinate(lng, lat)));
 
-                // Asignamos el estado dinámico
-                inmueble.setEstadoAprobacion(estadoInicial);
+                if (columnas.length > 9 && !columnas[9].trim().isEmpty()) {
+                    String urlsRaw = columnas[9].replaceAll("^\"|\"$", "");
+                    List<String> listaUrls = Arrays.asList(urlsRaw.split("\\|"));
+                    inmueble.setImagenes(mapper.writeValueAsString(listaUrls));
+                } else {
+                    inmueble.setImagenes("[]");
+                }
 
+                inmueble.setEstadoAprobacion(estadoInicial);
                 inmueblesNuevos.add(inmueble);
             }
 
             inmuebleRepository.saveAll(inmueblesNuevos);
 
-            // Mensaje de éxito dinámico para el frontend
+            // ALERTAMOS A TODOS LOS ADMINS DINÁMICAMENTE
+            if (!"Administrador".equalsIgnoreCase(rol) && !inmueblesNuevos.isEmpty()) {
+                notificarAdministradores("🔔 Revisión masiva: Un Agente Inmobiliario subió " + inmueblesNuevos.size() + " inmuebles y esperan tu aprobación.");
+            }
+
             String msjRespuesta = "Administrador".equalsIgnoreCase(rol)
                     ? "[OK] " + inmueblesNuevos.size() + " inmuebles publicados directo en el catálogo."
                     : "[OK] " + inmueblesNuevos.size() + " inmuebles procesados y encolados para moderación.";
@@ -209,7 +235,6 @@ public class InmuebleAdminController {
         }
     }
 
-    // EL MOTOR DE CACHÉ: Al eliminar una propiedad, limpiamos la memoria RAM para que no figure más
     @Caching(evict = {
             @CacheEvict(value = "catalogoInmuebles", allEntries = true),
             @CacheEvict(value = "analisisInmuebles", allEntries = true)
@@ -220,7 +245,6 @@ public class InmuebleAdminController {
         return ResponseEntity.ok(Map.of("mensaje", "Inmueble eliminado permanentemente."));
     }
 
-    // EL MOTOR DE CACHÉ: Cuando el admin aprueba, se limpia el caché para forzar a que aparezca en el mapa público
     @Caching(evict = {
             @CacheEvict(value = "catalogoInmuebles", allEntries = true),
             @CacheEvict(value = "analisisInmuebles", allEntries = true)
@@ -233,19 +257,21 @@ public class InmuebleAdminController {
             i.setEstadoAprobacion("Aprobado");
             inmuebleRepository.save(i);
 
-            Optional<UsuarioEntity> propOpt = usuarioRepository.findById(i.getPropietarioId());
-            if (propOpt.isPresent()) {
-                NotificacionEntity noti = new NotificacionEntity();
-                noti.setUsuarioEmail(propOpt.get().getEmail());
-                noti.setMensaje("✅ ¡Aprobada! Tu publicación '" + i.getTitulo() + "' ya es visible en el catálogo público.");
-                notificacionRepository.save(noti);
+            // Solo buscamos al propietario si el inmueble tiene uno asignado
+            if (i.getPropietarioId() != null && !i.getPropietarioId().isEmpty()) {
+                Optional<UsuarioEntity> propOpt = usuarioRepository.findById(i.getPropietarioId());
+                if (propOpt.isPresent()) {
+                    NotificacionEntity noti = new NotificacionEntity();
+                    noti.setUsuarioEmail(propOpt.get().getEmail());
+                    noti.setMensaje("✅ ¡Aprobada! Tu publicación '" + i.getTitulo() + "' ya es visible en el catálogo público.");
+                    notificacionRepository.save(noti);
+                }
             }
             return ResponseEntity.ok(Map.of("mensaje", "Aprobado exitosamente."));
         }
         return ResponseEntity.notFound().build();
     }
 
-    // EL MOTOR DE CACHÉ: Cuando el admin rechaza, limpiamos la memoria RAM
     @Caching(evict = {
             @CacheEvict(value = "catalogoInmuebles", allEntries = true),
             @CacheEvict(value = "analisisInmuebles", allEntries = true)
@@ -258,12 +284,15 @@ public class InmuebleAdminController {
             i.setEstadoAprobacion("Rechazado");
             inmuebleRepository.save(i);
 
-            Optional<UsuarioEntity> propOpt = usuarioRepository.findById(i.getPropietarioId());
-            if (propOpt.isPresent()) {
-                NotificacionEntity noti = new NotificacionEntity();
-                noti.setUsuarioEmail(propOpt.get().getEmail());
-                noti.setMensaje("❌ Rechazada: Tu publicación '" + i.getTitulo() + "'. Motivo: " + payload.get("motivo"));
-                notificacionRepository.save(noti);
+            // Solo buscamos al propietario si el inmueble tiene uno asignado
+            if (i.getPropietarioId() != null && !i.getPropietarioId().isEmpty()) {
+                Optional<UsuarioEntity> propOpt = usuarioRepository.findById(i.getPropietarioId());
+                if (propOpt.isPresent()) {
+                    NotificacionEntity noti = new NotificacionEntity();
+                    noti.setUsuarioEmail(propOpt.get().getEmail());
+                    noti.setMensaje("❌ Rechazada: Tu publicación '" + i.getTitulo() + "'. Motivo: " + payload.get("motivo"));
+                    notificacionRepository.save(noti);
+                }
             }
             return ResponseEntity.ok(Map.of("mensaje", "Rechazado correctamente."));
         }
